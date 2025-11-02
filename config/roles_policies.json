@@ -1,0 +1,107 @@
+[
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:owner",
+    "subject_id": "perm:manage:tenant"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:owner",
+    "subject_id": "perm:manage:billing"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:owner",
+    "subject_id": "perm:invite:user"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:owner",
+    "subject_id": "perm:delete:user"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:owner",
+    "subject_id": "perm:all:file"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:owner",
+    "subject_id": "perm:all:tool"
+  },
+
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:admin",
+    "subject_id": "perm:invite:user"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:admin",
+    "subject_id": "perm:delete:file"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:admin",
+    "subject_id": "perm:share:file"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:admin",
+    "subject_id": "perm:manage:tools"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:admin",
+    "subject_id": "perm:view:billing"
+  },
+
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:member",
+    "subject_id": "perm:upload:file"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:member",
+    "subject_id": "perm:delete:file:self"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:member",
+    "subject_id": "perm:share:file:self"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:member",
+    "subject_id": "perm:use:tools"
+  },
+
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:guest",
+    "subject_id": "perm:upload:file:guest"
+  },
+  {
+    "namespace": "tenant",
+    "object": "any",
+    "relation": "role:guest",
+    "subject_id": "perm:download:file:public"
+  }
+]

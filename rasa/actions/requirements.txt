@@ -1,0 +1,10 @@
+requests
+geopy
+sqlalchemy<2.0
+fuzzywuzzy==0.18.0
+thefuzz[speedup]==0.20.0
+# python-Levenshtein==0.21.1
+dateparser==1.1.8
+requests==2.31.0
+pymongo==4.6.1
+dnspython==2.5.0

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Residential Lease Agreement</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 1in;
+        background: url("{{ brand.watermark_url }}") no-repeat center center;
+        background-opacity: 0.05;
+      }
+
+      body {
+        font-family: 'Helvetica', Arial, sans-serif;
+        color: #333;
+        line-height: 1.6;
+        font-size: 14px;
+        position: relative;
+      }
+
+      /* Logo and Header */
+      .logo {
+        text-align: center;
+        margin-bottom: 10px;
+      }
+
+      .logo img {
+        width: 150px;
+        opacity: 0.95;
+      }
+
+      h1 {
+        text-align: center;
+        color: {{ brand.color or '#2e7d32' }};
+        margin-bottom: 15px;
+        font-size: 20px;
+        text-transform: uppercase;
+      }
+
+      h3 {
+        color: #2e7d32;
+        border-bottom: 1px solid #c8e6c9;
+        padding-bottom: 3px;
+      }
+
+      p { margin: 8px 0; }
+
+      ul { margin: 0; padding-left: 20px; }
+      li { margin-bottom: 6px; }
+
+      .section {
+        margin-top: 22px;
+        page-break-inside: avoid;
+      }
+
+      .id-info {
+        background: #f7f7f7;
+        border: 1px solid #ccc;
+        padding: 8px;
+        border-radius: 5px;
+        margin-top: 8px;
+        font-size: 13px;
+      }
+
+      /* Signatures */
+      .signatures {
+        margin-top: 60px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .signature-block {
+        text-align: center;
+        width: 45%;
+      }
+
+      .signature-block img {
+        width: 180px;
+        border-bottom: 1px solid #000;
+      }
+
+      .signature-block .placeholder {
+        height: 60px;
+        border-bottom: 1px solid #000;
+      }
+
+      .notice {
+        margin-top: 40px;
+        background: #f1f8e9;
+        border: 1px solid #c8e6c9;
+        border-radius: 6px;
+        text-align: center;
+        padding: 10px;
+        font-size: 13px;
+        color: #2e7d32;
+        page-break-inside: avoid;
+      }
+
+      footer {
+        position: fixed;
+        bottom: 10px;
+        font-size: 11px;
+        text-align: center;
+        width: 100%;
+        color: #999;
+      }
+
+      /* Watermark fallback if @page fails */
+      .watermark {
+        position: fixed;
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0.05;
+        z-index: -1;
+      }
+
+      .watermark img {
+        width: 500px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="logo">
+      <img src="{{ brand.logo }}" alt="{{ brand.company }} Logo" />
+    </div>
+
+    <h1>Residential Lease Agreement</h1>
+
+    <p>
+      This Lease Agreement (“Agreement”) is made on
+      <strong>{{ today }}</strong> between
+      <strong>{{ property.name }}</strong> (the “Landlord”) and
+      <strong>{{ tenant.full_name }}</strong> (the “Tenant”) for the property
+      located at <strong>{{ property.location }}</strong>.
+    </p>
+
+    <div class="id-info">
+      <strong>Tenant ID:</strong> {{ tenant.id_type }} — {{ tenant.id_number
+      }}<br />
+      <strong>Landlord ID:</strong> {{ property.owner_id_type }} — {{
+      property.owner_id_number }}
+    </div>
+
+    <div class="section">
+      <h3>1. Term</h3>
+      <p>
+        This Agreement shall commence on
+        <strong>{{ contract.start_date.strftime("%B %d, %Y") }}</strong> and end
+        on <strong>{{ contract.end_date.strftime("%B %d, %Y") }}</strong>. The
+        lease is not perpetual and may be renewed upon mutual agreement in
+        writing.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>2. Rent & Deposit</h3>
+      <p>
+        The Tenant agrees to pay monthly rent of
+        <strong>KES {{ '%.2f'|format(contract.rent_amount) }}</strong>, payable
+        on or before the 5th day of each month. The Tenant shall also pay a
+        refundable security deposit of
+        <strong>KES {{ '%.2f'|format(contract.deposit_amount) }}</strong>,
+        refundable within 14 days after vacating, subject to deductions for
+        damages or unpaid rent.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>3. Utilities & Responsibilities</h3>
+      <p>
+        Tenant shall pay for all metered utilities (including water,
+        electricity, and garbage) under their account. Shared or
+        landlord-managed utilities will be billed separately. Landlord remains
+        responsible for structural maintenance of the property.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>4. Additional Clauses</h3>
+      {% if contract.clauses %}
+      <ul>
+        {% for clause in contract.clauses %}
+        <li>
+          <strong>{{ clause.title }}</strong> — {{ clause.description }} {% if
+          clause.mandatory %}
+          <span style="color: #c62828; font-size: 12px">(Mandatory)</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>No additional clauses specified.</p>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h3>5. Governing Law & Disputes</h3>
+      <p>
+        This Agreement is governed by the Laws of Kenya. Any dispute shall be
+        resolved amicably through mediation or arbitration, failing which, the
+        courts of Kenya shall have jurisdiction.
+      </p>
+    </div>
+
+    <div class="section signatures">
+      <div class="signature-block">
+        {% if contract.tenant_signature %}
+        <img src="{{ contract.tenant_signature }}" alt="Tenant Signature" />
+        <p><strong>{{ tenant.full_name }}</strong></p>
+        <p>Date: {{ today }}</p>
+        {% else %}
+        <div class="placeholder"></div>
+        <p><em>Awaiting Tenant Signature</em></p>
+        {% endif %}
+      </div>
+
+      <div class="signature-block">
+        {% if contract.landlord_signature %}
+        <img src="{{ contract.landlord_signature }}" alt="Landlord Signature" />
+        <p><strong>{{ property.name }}</strong></p>
+        <p>Date: {{ today }}</p>
+        {% else %}
+        <div class="placeholder"></div>
+        <p><em>Awaiting Landlord Signature</em></p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if contract.tenant_signature and contract.landlord_signature %}
+    <div class="notice">
+      ✔ This agreement has been <strong>electronically signed</strong> by both
+      parties in compliance with the Laws of Kenya. Digital copies are stored
+      securely and verifiable within Cecil Homes’ Property Management System.
+    </div>
+    {% endif %}
+
+    <div class="watermark">
+      <img src="{{ brand.watermark }}" alt="Watermark" />
+    </div>
+
+    <footer>
+      {{ brand.company or 'Cecil Homes Property Management' }} &nbsp;|&nbsp;
+      Generated on {{ today }}
+    </footer>
+  </body>
+</html>

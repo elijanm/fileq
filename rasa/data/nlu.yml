@@ -1,0 +1,94 @@
+version: "3.1"
+
+nlu:
+  - intent: greet
+    examples: |
+      - hi
+      - hello
+      - hey
+      - good morning
+      - start
+
+  - intent: select_role
+    examples: |
+      - 1
+      - 2  
+      - 3
+      - caregiver
+      - afh provider
+      - service provider
+      - I am a caregiver
+      - I run an AFH
+      - I provide services
+
+  - intent: provide_contact
+    examples: |
+      - my phone is 206-555-1234
+      - email is john@example.com
+      - contact me at 425-123-4567
+      - my email address is sarah@gmail.com
+      - phone number 253-987-6543
+
+  - intent: browse_services
+    examples: |
+      - show me options
+      - what services are available
+      - browse jobs
+      - see opportunities
+      - what can you help with
+
+  - intent: select_certification
+    examples: |
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - CNA
+      - HCA
+      - RN
+      - CPR
+      - First Aid
+      - option 1
+      - I have CNA
+
+  - intent: upload_preference
+    examples: |
+      - upload now
+      - upload later
+      - now
+      - later
+      - I'll upload now
+      - I'll do it later
+
+  - intent: notification_preference
+    examples: |
+      - mobile
+      - email
+      - text messages
+      - phone notifications
+      - email notifications
+      - SMS
+
+  - intent: provide_info
+    examples: |
+      - I live in Seattle
+      - available weekdays
+      - I can work nights
+      - I have CNA certification
+      - my name is John Smith
+      - I prefer day shifts
+
+entities:
+  - phone_number
+  - email
+  - location
+  - availability
+  - credentials
+  - name
+
+regex:
+  - name: phone_number
+    pattern: '\(?[0-9]{3}\)?[-\s]?[0-9]{3}[-\s]?[0-9]{4}'
+  - name: email
+    pattern: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'

@@ -1,0 +1,32 @@
+{
+    "name": "pms",
+    "display_name": "Pms",
+    "version": "1.0.0",
+    "author": "Nexidra Technologies",
+    "description": "Pms plugin for Nexidra modular system.",
+    "enabled": true,
+    "verified": false,
+    "permissions": [
+        "pms.*",
+        "pms.create",
+        "pms.view"
+    ],
+    "database": "mongo",
+    "pricing": {
+        "type": "subscription",
+        "plan_id": "default",
+        "trial_days": 7,
+        "currency": "USD",
+        "price": 9.99,
+        "features": [
+            "unlimited_events",
+            "export_csv"
+        ]
+    },
+    "minimum_subscription": {
+        "required": false,
+        "plan_id": "core_pro",
+        "feature": "analytics"
+    },
+    "created_at": "2025-10-10T02:57:40.665311+00:00"
+}

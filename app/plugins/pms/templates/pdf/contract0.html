@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Residential Tenancy Agreement</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 0.75in;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Arial", "Helvetica", sans-serif;
+        color: #000;
+        line-height: 1.6;
+        font-size: 11px;
+        padding: 20px;
+      }
+
+      /* HEADER STYLES */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #2e7d32;
+      }
+
+      .logo-section {
+        flex: 0 0 auto;
+      }
+
+      .logo-section img {
+        height: 50px;
+        width: auto;
+        max-width: 180px;
+        object-fit: contain;
+      }
+
+      .company-info {
+        flex: 1;
+        text-align: right;
+        font-size: 9px;
+        color: #555;
+        line-height: 1.5;
+      }
+
+      .company-info .company-name {
+        font-size: 12px;
+        font-weight: bold;
+        color: #2e7d32;
+        margin-bottom: 3px;
+      }
+
+      .company-info .tagline {
+        font-style: italic;
+        color: #2e7d32;
+        font-size: 9px;
+        margin-bottom: 5px;
+      }
+
+      /* TYPOGRAPHY */
+      h1 {
+        text-align: center;
+        color: #000;
+        font-size: 18px;
+        text-transform: uppercase;
+        text-decoration: underline;
+        margin: 25px 0 20px 0;
+        font-weight: bold;
+      }
+
+      h3 {
+        color: #2e7d32;
+        font-size: 13px;
+        text-transform: uppercase;
+        font-weight: bold;
+        margin: 25px 0 12px 0;
+        border-bottom: 2px solid #2e7d32;
+        padding-bottom: 5px;
+      }
+
+      p {
+        margin: 10px 0;
+        text-align: justify;
+      }
+
+      strong {
+        font-weight: bold;
+      }
+
+      em {
+        font-style: italic;
+      }
+
+      /* PARTY INFO BOXES */
+      .party-box {
+        background: #f9f9f9;
+        border-left: 4px solid #2e7d32;
+        padding: 12px 15px;
+        margin: 15px 0;
+        line-height: 1.8;
+      }
+
+      .party-box p {
+        margin: 5px 0;
+        text-align: left;
+      }
+
+      /* FINANCIAL TABLES */
+      .financial-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 10px;
+      }
+
+      .financial-table thead th {
+        background: #2e7d32;
+        color: white;
+        padding: 10px 8px;
+        text-align: left;
+        font-weight: bold;
+        border: 1px solid #2e7d32;
+      }
+
+      .financial-table .section-header {
+        background: #e8f5e9 !important;
+        color: #000 !important;
+        font-weight: bold;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      .financial-table tbody td {
+        padding: 8px;
+        border: 1px solid #ddd;
+        vertical-align: top;
+      }
+
+      .financial-table tbody tr:nth-child(even) {
+        background: #fafafa;
+      }
+
+      .financial-table .total-row {
+        background: #fff3cd !important;
+        font-weight: bold;
+        border-top: 2px solid #2e7d32;
+      }
+
+      .financial-table .total-row td {
+        padding: 12px 8px;
+        font-size: 11px;
+      }
+
+      /* PAYMENT METHOD TABLE */
+      .payment-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 10px;
+      }
+
+      .payment-table th {
+        background: #f5f5f5;
+        padding: 10px;
+        text-align: left;
+        font-weight: bold;
+        border: 1px solid #ccc;
+      }
+
+      .payment-table td {
+        padding: 10px;
+        border: 1px solid #ddd;
+        line-height: 1.7;
+      }
+
+      .payment-table .method-name {
+        font-weight: bold;
+        color: #2e7d32;
+        font-size: 11px;
+      }
+
+      /* NOTICE BOXES */
+      .notice-box {
+        background: #fff3cd;
+        border: 2px solid #ffc107;
+        border-radius: 5px;
+        padding: 12px 15px;
+        margin: 15px 0;
+        text-align: center;
+        font-weight: bold;
+        font-size: 11px;
+      }
+
+      .success-notice {
+        background: #d4edda;
+        border-color: #28a745;
+        color: #155724;
+      }
+
+      /* CLAUSES */
+      .clause {
+        margin: 18px 0;
+        padding-left: 5px;
+      }
+
+      .clause-number {
+        font-weight: bold;
+        margin-right: 8px;
+        color: #2e7d32;
+      }
+
+      .sub-clause {
+        margin: 10px 0 10px 30px;
+        text-align: justify;
+      }
+
+      /* SIGNATURE SECTION */
+      .signature-section {
+        margin-top: 50px;
+        page-break-inside: avoid;
+      }
+
+      .signature-block {
+        border: 1px solid #ccc;
+        padding: 20px;
+        margin: 25px 0;
+        background: #fafafa;
+      }
+
+      .signature-line {
+        width: 100%;
+        max-width: 350px;
+        border-top: 1px solid #000;
+        margin: 50px 0 15px 0;
+      }
+
+      .esignature-badge {
+        display: inline-block;
+        background: #28a745;
+        color: white;
+        padding: 6px 18px;
+        border-radius: 20px;
+        font-size: 10px;
+        margin: 10px 0;
+      }
+
+      /* METADATA TABLES */
+      .metadata-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 9px;
+      }
+
+      .metadata-table th {
+        background: #f5f5f5;
+        padding: 8px;
+        text-align: left;
+        font-weight: bold;
+        border: 1px solid #ddd;
+      }
+
+      .metadata-table td {
+        padding: 8px;
+        border: 1px solid #ddd;
+        font-family: "Courier New", monospace;
+      }
+
+      /* PAGE BREAKS */
+      .page-break {
+        page-break-after: always;
+      }
+
+      /* FOOTER */
+      .prepared-by {
+        margin-top: 50px;
+        text-align: center;
+        font-size: 10px;
+        color: #666;
+        padding-top: 20px;
+        border-top: 1px solid #ddd;
+      }
+
+      footer {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #2e7d32;
+        text-align: center;
+        font-size: 9px;
+        color: #666;
+        line-height: 1.6;
+      }
+
+      /* UTILITY CLASSES */
+      .text-right {
+        text-align: right;
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      .mb-10 {
+        margin-bottom: 10px;
+      }
+
+      .mt-20 {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HEADER -->
+    <div class="header">
+      <div class="logo-section">
+        <img src="{{ brand.logo }}" alt="{{ brand.company }} Logo" />
+      </div>
+      <div class="company-info">
+        <div class="company-name">
+          {{ brand.company or 'CECIL HOMES PROPERTY MANAGEMENT' }}
+        </div>
+        <div class="tagline">
+          {{ brand.tagline or 'Your Lifestyle & Beyond' }}
+        </div>
+        <div>
+          P.O Box {{ brand.postal_address or '103793-00101' }}, {{ brand.city or
+          'Nairobi' }}
+        </div>
+        <div>Tel: {{ brand.phone }} | Email: {{ brand.email }}</div>
+        {% if brand.website %}
+        <div>{{ brand.website }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- TITLE -->
+    <h1>Tenancy Agreement</h1>
+
+    <!-- INTRODUCTION -->
+    <p>
+      An agreement is made this
+      <strong>{{ contract.start_date.strftime("%d") }}</strong> day of
+      <strong>{{ contract.start_date.strftime("%B") }}</strong> Two Thousand and
+      <strong
+        >{{ contract.start_date.strftime("%Y").replace('20', '') }}</strong
+      >
+      between:
+    </p>
+
+    <!-- TENANT INFORMATION -->
+    <div class="party-box">
+      <p><strong>THE TENANT:</strong></p>
+      <p><strong>{{ tenant.full_name }}</strong></p>
+      <p>
+        P.O BOX {{ tenant.postal_address or '________________' }} - {{
+        tenant.city or '________________' }}
+      </p>
+      <p>
+        {{ tenant.id_type or 'ID' }} NO: <strong>{{ tenant.id_number }}</strong>
+      </p>
+      <p>Phone: {{ tenant.phone }} | Email: {{ tenant.email }}</p>
+    </div>
+
+    <!-- LANDLORD INFORMATION -->
+    <div class="party-box">
+      <p><strong>THE LANDLORD/MANAGING AGENT:</strong></p>
+      <p><strong>{{ property.landlord_name or property.name }}</strong></p>
+      <p>
+        P.O BOX {{ property.landlord_postal_address or '________________' }}
+      </p>
+      <p>
+        {{ property.owner_id_type or 'ID' }} NO:
+        <strong>{{ property.owner_id_number }}</strong>
+      </p>
+      <p>Managed by: <strong>{{ brand.company }}</strong></p>
+    </div>
+
+    <p class="mt-20"><strong>WHERE IT IS AGREED AS FOLLOWS:</strong></p>
+
+    <!-- PROPERTY DESCRIPTION -->
+    <p>
+      The Managing agent agrees to let and the Tenant agrees to lease
+      <strong>House No. {{ unit.unit_number }}</strong>
+      <strong>{{ unit.furnishing_status or 'Unfurnished' }}</strong> and
+      improvements erected thereon and being situated at
+      <strong>{{ property.location }}</strong>.
+    </p>
+
+    <!-- FINANCIAL SECTION -->
+    <h3>Financial Terms & Payment Schedule</h3>
+
+    <!-- MONTHLY CHARGES -->
+    <table class="financial-table">
+      <thead>
+        <tr>
+          <th colspan="3" class="section-header">Monthly Charges</th>
+        </tr>
+        <tr>
+          <th style="width: 60%">Description</th>
+          <th style="width: 25%">Amount ({{ contract.currency or 'KES' }})</th>
+          <th style="width: 15%">Due Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Monthly Rent</strong></td>
+          <td><strong>{{ '{:,.2f}'.format(contract.rent_amount) }}</strong></td>
+          <td>{{ contract.payment_due_day or 5 }}<sup>th</sup></td>
+        </tr>
+        {% if contract.service_charge and contract.service_charge > 0 %}
+        <tr>
+          <td>Service Charge (Garbage, Security, etc.)</td>
+          <td>{{ '{:,.2f}'.format(contract.service_charge) }}</td>
+          <td>{{ contract.payment_due_day or 5 }}<sup>th</sup></td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <!-- UTILITIES -->
+    {% if utilities and utilities|length > 0 %}
+    <table class="financial-table">
+      <thead>
+        <tr>
+          <th colspan="4" class="section-header">
+            Utilities (Payable by Tenant)
+          </th>
+        </tr>
+        <tr>
+          <th style="width: 35%">Utility</th>
+          <th style="width: 25%">Rate/Basis</th>
+          <th style="width: 25%">Amount</th>
+          <th style="width: 15%">Billing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for utility in utilities %}
+        <tr>
+          <td>{{ utility.name }}</td>
+          <td>
+            {% if utility.billingBasis == 'metered' %} {{ utility.rate }}/{{
+            utility.unitOfMeasure }} {% elif utility.billingBasis == 'monthly'
+            %} Fixed Monthly {% else %} As per usage {% endif %}
+          </td>
+          <td>
+            {% if utility.billingBasis == 'monthly' %} {% if
+            utility.billingLevel == 'property' %} {{
+            '{:,.2f}'.format(utility.rate / property.unitsTotal) }} {% else %}
+            {{ '{:,.2f}'.format(utility.rate) }} {% endif %} {% else %} As per
+            meter {% endif %}
+          </td>
+          <td>{{ utility.billingFrequency|title }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <!-- DEPOSITS -->
+    <table class="financial-table">
+      <thead>
+        <tr>
+          <th colspan="3" class="section-header">
+            Deposits (One-time, Refundable)
+          </th>
+        </tr>
+        <tr>
+          <th style="width: 60%">Description</th>
+          <th style="width: 25%">Amount ({{ contract.currency or 'KES' }})</th>
+          <th style="width: 15%">Payable</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>Security Deposit</strong> (Equivalent to {{
+            property.deposit_terms_in_month or 2 }} month(s) rent)
+          </td>
+          <td>
+            <strong>{{ '{:,.2f}'.format(contract.deposit_amount) }}</strong>
+          </td>
+          <td>On signing</td>
+        </tr>
+        {% for utility in utilities %} {% if utility['isDepositRequired'] %}
+        <tr>
+          <td>
+            {{ utility['name'] }} Deposit ({% if utility['isRefundable'] %}
+            Refundable {% else %} Non-Refundable {% endif %})
+          </td>
+          <td>KES {{ "{:,.2f}".format(utility['depositAmount'] or 0) }}</td>
+          <td>On signing</td>
+        </tr>
+        {% endif %} {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- OTHER FEES -->
+    <table class="financial-table">
+      <thead>
+        <tr>
+          <th colspan="3" class="section-header">Other Fees & Charges</th>
+        </tr>
+        <tr>
+          <th style="width: 60%">Description</th>
+          <th style="width: 25%">Amount ({{ contract.currency or 'KES' }})</th>
+          <th style="width: 15%">Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Agreement Consideration Fee (Stamp Duty)</td>
+          <td>{{ '{:,.2f}'.format(contract.agreement_fee or 0) }}</td>
+          <td>One-time</td>
+        </tr>
+        <tr>
+          <td>Late Payment Penalty</td>
+          <td>{{ contract.late_penalty_rate or 10 }}% of rent</td>
+          <td>After due date</td>
+        </tr>
+        <tr>
+          <td>Bounced Cheque Fee</td>
+          <td>{{ '{:,.2f}'.format(contract.bounced_cheque_fee or 3500) }}</td>
+          <td>Per occurrence</td>
+        </tr>
+        {% if property.property_tax and property.property_tax > 0 %}
+        <tr>
+          <td>Kenya Property Tax (Annual)</td>
+          <td>{{ '{:,.2f}'.format(property.property_tax) }}</td>
+          <td>As applicable</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <!-- TOTAL SUMMARY -->
+    <table class="financial-table">
+      <tbody>
+        <tr class="total-row">
+          <td style="width: 60%"><strong>TOTAL DUE UPON SIGNING</strong></td>
+          <td colspan="2" class="text-right">
+            <strong
+              >{{ contract.currency or 'KES' }} {{
+              '{:,.2f}'.format(contract.rent_amount + (contract.service_charge
+              or 0) + contract.deposit_amount + (contract.agreement_fee or 0) +
+              (contract.total_utility_deposits or 0)) }}</strong
+            >
+          </td>
+        </tr>
+        <tr style="background: #f9f9f9">
+          <td
+            colspan="3"
+            style="padding: 8px; font-size: 9px; font-style: italic"
+          >
+            Breakdown: First Month Rent ({{
+            '{:,.2f}'.format(contract.rent_amount) }}){% if
+            contract.service_charge and contract.service_charge > 0 %} + Service
+            Charge ({{ '{:,.2f}'.format(contract.service_charge) }}){% endif %}
+            + Security Deposit ({{ '{:,.2f}'.format(contract.deposit_amount) }})
+            + Utility Deposits ({{
+            '{:,.2f}'.format(contract.total_utility_deposits or 0) }}) +
+            Agreement Fee ({{ '{:,.2f}'.format(contract.agreement_fee or 0) }})
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="notice-box">
+      <strong>NB:</strong> Under no circumstances should the tenant use the
+      deposit as rent.
+    </div>
+
+    <!-- PAYMENT METHODS -->
+    <h3>Payment Methods</h3>
+
+    <table class="payment-table">
+      <thead>
+        <tr>
+          <th style="width: 25%">Method</th>
+          <th>Payment Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if payment.paybill_no or payment.till_no %}
+        <tr>
+          <td class="method-name">M-PESA</td>
+          <td>
+            {% if payment.paybill_no %}
+            <strong>Paybill Number:</strong> {{ payment.paybill_no }}<br />
+            <strong>Account Number:</strong> {{ unit.unit_number or
+            unit.unit_name }} {% elif payment.till_no %}
+            <strong>Till Number:</strong> {{ payment.till_no }} {% endif %}
+          </td>
+        </tr>
+        {% endif %} {% if payment.bank_name %}
+        <tr>
+          <td class="method-name">BANK TRANSFER</td>
+          <td>
+            <strong>Bank:</strong> {{ payment.bank_name }}<br />
+            <strong>Branch:</strong> {{ payment.branch }}<br />
+            {% if payment.account_number %}
+            <strong>Account Number:</strong> {{ payment.account_number }}<br />
+            {% endif %}
+            <strong>Account Name:</strong> {{ property.landlord_name or
+            property.name }}
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <p style="font-size: 10px; font-style: italic; margin-top: 10px">
+      <strong>Payment Terms:</strong> All rent payments are due by the
+      <strong>{{ contract.payment_due_day or 5 }}<sup>th</sup> day</strong> of
+      each month. Late payments attract a penalty of
+      <strong>{{ contract.late_penalty_rate or 10 }}%</strong> of the monthly
+      rent. Bounced cheques incur re-collection fees of
+      <strong
+        >{{ contract.currency or 'KES' }} {{
+        '{:,.2f}'.format(contract.bounced_cheque_fee or 3500) }}</strong
+      >.
+    </p>
+    <!-- Force next section to a new page -->
+    <div class="page-break"></div>
+    <!-- MAIN CLAUSES -->
+    <h3>Terms and Conditions</h3>
+
+    <div class="clause">
+      <span class="clause-number">1.</span>
+      <strong>LEASE TERM:</strong> The lease period shall be for
+      <strong>{{ contract.lease_duration_months or 11 }} Months</strong>
+      renewable commencing
+      <strong>{{ contract.start_date.strftime("%B %d, %Y") }}</strong> and
+      ending <strong>{{ contract.end_date.strftime("%B %d, %Y") }}</strong>.
+      This is not a perpetual lease and may be renewed upon mutual agreement in
+      writing.
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">2.</span>
+      <strong>RENT PAYMENT:</strong> The Tenant shall pay monthly rent of
+      <strong
+        >{{ contract.currency or 'KES' }} {{
+        '{:,.2f}'.format(contract.rent_amount) }}</strong
+      >
+      on or before the
+      <strong>{{ contract.payment_due_day or 5 }}<sup>th</sup></strong> day of
+      each month. Rent is exclusive of utility bills which are payable by the
+      tenant.
+    </div>
+
+    {% set has_utility_deposits = (utilities | selectattr('isDepositRequired') |
+    list | length) > 0 %}
+
+    <div class="clause">
+      <span class="clause-number">3.</span>
+      <strong>SECURITY DEPOSIT:</strong>
+
+      {% if has_utility_deposits %}
+      <p>
+        The tenant shall pay a <strong>security deposit</strong> of
+        <strong>
+          {{ contract['currency'] or 'KES' }} {{
+          "{:,.2f}".format(contract['deposit_amount'] or 0) }}
+        </strong>
+        plus the following <strong>utility deposits</strong> on signing:
+      </p>
+
+      <ul style="margin: 0.5rem 0 0.5rem 2rem; list-style-type: disc">
+        {% for u in utilities if u['isDepositRequired'] %}
+        <li style="margin-bottom: 0.3rem">
+          {{ u['name'] }} Deposit ({{ 'Refundable' if u['isRefundable'] else
+          'Non-Refundable' }}) —
+          <strong>
+            {{ contract['currency'] or 'KES' }} {{
+            "{:,.2f}".format(u['depositAmount'] or 0) }}
+          </strong>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <p style="margin-top: 0.5rem">
+        All deposits are refundable within <strong>14 days</strong> after
+        vacating the premises, subject to deductions for damages, unpaid rent,
+        or outstanding utility bills.
+      </p>
+      {% else %}
+      <p>
+        The tenant shall pay a <strong>security deposit</strong> of
+        <strong>
+          {{ contract['currency'] or 'KES' }} {{
+          "{:,.2f}".format(contract['deposit_amount'] or 0) }} </strong
+        >, refundable within <strong>14 days</strong> after vacating the
+        premises, subject to deductions for damages, unpaid rent, or outstanding
+        utility bills.
+      </p>
+      {% endif %}
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">4.</span>
+      <strong>NOTICE PERIOD:</strong> Either party can terminate this lease by
+      giving
+      <strong>{{ contract.notice_period_days or 30 }} days</strong> written
+      notice or payment of equivalent rent in lieu thereof. The tenancy shall be
+      deemed terminated upon expiry of the fixed period or by giving written
+      notice.
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.</span>
+      <strong>RENEWAL OPTION:</strong> If the Tenant desires to renew the lease,
+      they must notify the Landlord in writing at least
+      <strong>{{ contract.renewal_notice_months or 3 }} months</strong> before
+      expiry. The Landlord shall grant first option to renew for another term at
+      rent to be mutually negotiated.
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">6.</span>
+      <strong>DEFAULT & RE-ENTRY:</strong> If rent is in arrears for more than
+      <strong>10 days</strong> after becoming due, or if the Tenant breaches any
+      covenant, the Landlord may re-enter and repossess the premises without
+      prejudice to any other rights or remedies.
+    </div>
+
+    <!-- PAGE BREAK -->
+    <div class="page-break"></div>
+
+    <!-- TENANT OBLIGATIONS -->
+    <h3>The Tenant Hereby Agrees:</h3>
+
+    <div class="sub-clause">
+      <strong>a)</strong> To keep the premises and adjoining area clean and in
+      good order at own expense and hand over the premises on termination in the
+      same condition as on entry, fair wear and tear exempted.
+    </div>
+
+    <div class="sub-clause">
+      <strong>b)</strong> Not to do anything that may make insurance invalid or
+      increase premium rates for fire or other insurance in respect of the
+      premises.
+    </div>
+
+    <div class="sub-clause">
+      <strong>c)</strong> To use the premise in tenant-like manner for
+      <strong>residential purposes only</strong> and shall not carry on any
+      trade or business without prior written consent.
+    </div>
+
+    <div class="sub-clause">
+      <strong>d)</strong> Not to assign, sublet, charge, or part with possession
+      of the premises (or any part thereof) without prior written consent of the
+      Landlord or managing agents.
+    </div>
+
+    <div class="sub-clause">
+      <strong>e)</strong> Not to damage or make alterations to the premises or
+      drive nails, screws, bolts, or other fasteners into walls, floors, or
+      ceilings without written consent of the managing agents.
+    </div>
+
+    <div class="sub-clause">
+      <strong>f)</strong> To permit the managing agent at arranged times to
+      enter the premises to inspect the condition, fixtures, and fittings.
+    </div>
+
+    <div class="sub-clause">
+      <strong>g)</strong> To permit the agents during the last two months of
+      tenancy to display "To Let" notices in front windows and allow prospective
+      tenants to view the premises at arranged times.
+    </div>
+
+    <div class="sub-clause">
+      <strong>h)</strong> To make periodic inspections and report immediately in
+      writing any structural defects, pest infestations (white ants, bees,
+      termites), or signs of wet or dry rot.
+    </div>
+
+    <div class="sub-clause">
+      <strong>i)</strong> Not to cause nuisance or annoyance to neighbors or do
+      anything detrimental to the Landlord's reputation.
+    </div>
+
+    <div class="sub-clause">
+      <strong>j)</strong> To be responsible for all damages during tenancy and
+      replace with similar quality all items that are lost, broken, or damaged.
+    </div>
+
+    <div class="sub-clause">
+      <strong>k)</strong> Not to use charcoal or wood for cooking in the house.
+    </div>
+
+    <div class="sub-clause">
+      <strong>l)</strong> One month before lease expiry or earlier
+      determination, to have a professional painter paint the premises with two
+      coats of good paint to the Landlord's satisfaction.
+    </div>
+
+    <div class="sub-clause">
+      <strong>m)</strong> To yield up the building with all fittings, fixtures,
+      and equipment in good order and condition.
+    </div>
+
+    <div class="sub-clause">
+      <strong>n)</strong> Not to remove any screws, bolts, nails, grills, doors,
+      or fixtures/fittings, even if installed at Tenant's expense.
+    </div>
+
+    <div class="sub-clause">
+      <strong>o)</strong> To pay stamp duty on this Agreement and any
+      preparation charges.
+    </div>
+
+    <div class="sub-clause">
+      <strong>p)</strong> To pay required utilities fee as stipulated in the
+      lease terms.
+    </div>
+
+    <div class="sub-clause">
+      <strong>q)</strong> To attend welfare meetings within the estate and
+      cooperate with neighbors.
+    </div>
+
+    <div class="sub-clause">
+      <strong>r)</strong> To ensure all utility meters are read and bills
+      settled before vacating the premises.
+    </div>
+    <div class="page-break"></div>
+    <!-- LANDLORD OBLIGATIONS -->
+    <h3>The Landlord Agrees:</h3>
+
+    <div class="sub-clause">
+      <strong>a)</strong> That the tenant paying the rent and performing the
+      agreement on his part, the tenant may quietly possess and enjoy the
+      premises during the tenancy without any unlawful interruption from the
+      Landlady or any person claiming under or in trust for that party.
+    </div>
+
+    <div class="sub-clause">
+      <strong>b)</strong> To keep the outside walls, roof, and main structure of
+      the premises in good order and repair.
+    </div>
+
+    <div class="sub-clause">
+      <strong>c)</strong> To pay rates and land rent in respect of the premises.
+    </div>
+
+    <div class="sub-clause">
+      <strong>d)</strong> To grant the Tenant first option to renew for another
+      term if Tenant provides written notice {{ contract.renewal_notice_months
+      or 3 }} months before expiry and has complied with all negotiated new
+      lease terms.
+    </div>
+    <div class="sub-clause">
+      <strong>e)</strong> It is hereby expressly declared and agreed that if the
+      rent shall be in arrears for more than Ten (10) days after the same shall
+      have become due and payable whether formally demanded or not or if the
+      tenant shall fail to perform and observe any of the covenants herein
+      contained or implied it shall be lawful for the Landlady at any time
+      thereafter to enter into the said premises or any part thereof and to
+      again repossess the same without prejudice to any right or action or
+      remedy of the landlady in respect of any antecedent breach of any of the
+      covenants herein contained or implied.
+    </div>
+    <div class="page-break"></div>
+    <!-- ADDITIONAL CLAUSES -->
+    {% if contract.clauses and contract.clauses|length > 0 %}
+    <h3>Additional Special Clauses</h3>
+    {% for clause in contract.clauses %}
+    <div class="sub-clause">
+      <strong>{{ loop.index }})</strong> <strong>{{ clause.title }}:</strong> {{
+      clause.description }} {% if clause.mandatory %}
+      <span style="color: #c62828"> (Mandatory)</span>
+      {% endif %}
+    </div>
+    {% endfor %} {% endif %}
+
+    <!-- GOVERNING LAW -->
+    <div class="clause mt-20">
+      <span class="clause-number"
+        >{{ 7 + (contract.clauses|length if contract.clauses else 0) }}.</span
+      >
+      <strong>GOVERNING LAW & DISPUTES:</strong> This Agreement is governed by
+      the Laws of Kenya. Any disputes shall be resolved amicably through
+      mediation or arbitration. Failing which, the courts of Kenya shall have
+      exclusive jurisdiction.
+    </div>
+
+    <!-- PAGE BREAK -->
+    <div class="page-break"></div>
+
+    <!-- SIGNATURES -->
+    <h3>Signatures</h3>
+
+    <div class="signature-section">
+      <div class="signature-block">
+        <p><strong>SIGNED BY THE TENANT:</strong></p>
+        {% if contract.tenant_signature %}
+        <img
+          src="{{ contract.tenant_signature }}"
+          alt="Tenant Signature"
+          style="max-width: 250px; margin: 15px 0"
+        />
+        <div class="esignature-badge">✓ Electronically Signed</div>
+        {% else %}
+        <div class="signature-line"></div>
+        {% endif %}
+        <p class="mt-20"><strong>NAME:</strong> {{ tenant.full_name }}</p>
+        <p><strong>ID NO:</strong> {{ tenant.id_number }}</p>
+        <p>
+          <strong>DATE:</strong> {{ contract.tenant_signed_date.strftime("%B %d,
+          %Y") if contract.tenant_signed_date else '______________________' }}
+        </p>
+      </div>
+
+      <div class="signature-block">
+        <p><strong>SIGNED BY THE LANDLORD/AGENT:</strong></p>
+        {% if contract.landlord_signature %}
+        <img
+          src="{{ contract.landlord_signature }}"
+          alt="Landlord Signature"
+          style="max-width: 250px; margin: 15px 0"
+        />
+        <div class="esignature-badge">✓ Electronically Signed</div>
+        {% else %}
+        <div class="signature-line"></div>
+        {% endif %}
+        <p class="mt-20">
+          <strong>NAME:</strong> {{ property.landlord_name or property.name }}
+        </p>
+        <p>
+          <strong>DATE:</strong> {{ contract.landlord_signed_date.strftime("%B
+          %d, %Y") if contract.landlord_signed_date else
+          '______________________' }}
+        </p>
+      </div>
+    </div>
+
+    {% if contract.tenant_signature and contract.landlord_signature %}
+    <div class="notice-box success-notice">
+      ✔ This agreement has been <strong>electronically signed</strong> by both
+      parties in compliance with Kenya's Evidence Act and Electronic
+      Transactions regulations.
+    </div>
+    {% endif %}
+
+    <!-- E-SIGNATURE ANNEX -->
+    {% if contract.tenant_signature_metadata or
+    contract.landlord_signature_metadata %}
+    <div class="page-break"></div>
+
+    <h1 style="font-size: 16px">Annex: E-Signature Verification Metadata</h1>
+
+    <p>
+      This annex provides cryptographic proof and audit trail for electronically
+      signed agreements in compliance with Kenya's Evidence Act and Electronic
+      Transactions regulations.
+    </p>
+
+    <!-- TENANT SIGNATURE METADATA -->
+    {% if contract.tenant_signature_metadata %}
+    <h3>Tenant Signature Metadata</h3>
+    <table class="metadata-table">
+      <thead>
+        <tr>
+          <th style="width: 30%">Parameter</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Signed By</strong></td>
+          <td>{{ tenant.full_name }} ({{ tenant.email }})</td>
+        </tr>
+        <tr>
+          <td><strong>Signature Timestamp</strong></td>
+          <td>{{ contract.tenant_signature_metadata.timestamp }}</td>
+        </tr>
+        <tr>
+          <td><strong>IP Address</strong></td>
+          <td>{{ contract.tenant_signature_metadata.ip_address }}</td>
+        </tr>
+        <tr>
+          <td><strong>Geolocation</strong></td>
+          <td>{{ contract.tenant_signature_metadata.location }}</td>
+        </tr>
+        <tr>
+          <td><strong>Device/User Agent</strong></td>
+          <td>{{ contract.tenant_signature_metadata.user_agent }}</td>
+        </tr>
+        <tr>
+          <td><strong>Session ID</strong></td>
+          <td>{{ contract.tenant_signature_metadata.session_id }}</td>
+        </tr>
+        <tr>
+          <td><strong>Document Hash (SHA-256)</strong></td>
+          <td>{{ contract.tenant_signature_metadata.document_hash }}</td>
+        </tr>
+        <tr>
+          <td><strong>Signature Hash</strong></td>
+          <td>{{ contract.tenant_signature_metadata.signature_hash }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% endif %}
+
+    <!-- LANDLORD SIGNATURE METADATA -->
+    {% if contract.landlord_signature_metadata %}
+    <h3>Landlord/Agent Signature Metadata</h3>
+    <table class="metadata-table">
+      <thead>
+        <tr>
+          <th style="width: 30%">Parameter</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Signed By</strong></td>
+          <td>{{ property.landlord_name or property.name }}</td>
+        </tr>
+        <tr>
+          <td><strong>Signature Timestamp</strong></td>
+          <td>{{ contract.landlord_signature_metadata.timestamp }}</td>
+        </tr>
+        <tr>
+          <td><strong>IP Address</strong></td>
+          <td>{{ contract.landlord_signature_metadata.ip_address }}</td>
+        </tr>
+        <tr>
+          <td><strong>Geolocation</strong></td>
+          <td>{{ contract.landlord_signature_metadata.location }}</td>
+        </tr>
+        <tr>
+          <td><strong>Device/User Agent</strong></td>
+          <td>{{ contract.landlord_signature_metadata.user_agent }}</td>
+        </tr>
+        <tr>
+          <td><strong>Session ID</strong></td>
+          <td>{{ contract.landlord_signature_metadata.session_id }}</td>
+        </tr>
+        <tr>
+          <td><strong>Document Hash (SHA-256)</strong></td>
+          <td>{{ contract.landlord_signature_metadata.document_hash }}</td>
+        </tr>
+        <tr>
+          <td><strong>Signature Hash</strong></td>
+          <td>{{ contract.landlord_signature_metadata.signature_hash }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% endif %}
+
+    <!-- DOCUMENT METADATA -->
+    <h3>Document Metadata</h3>
+    <table class="metadata-table">
+      <thead>
+        <tr>
+          <th style="width: 30%">Parameter</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Document ID</strong></td>
+          <td>{{ contract.id }}</td>
+        </tr>
+        <tr>
+          <td><strong>Property ID</strong></td>
+          <td>{{ contract.property_id }}</td>
+        </tr>
+        <tr>
+          <td><strong>Unit ID</strong></td>
+          <td>{{ unit.id if unit.id else 'N/A' }}</td>
+        </tr>
+        <tr>
+          <td><strong>Generation Timestamp</strong></td>
+          <td>{{ contract.generated_at or today }}</td>
+        </tr>
+        <tr>
+          <td><strong>System Platform</strong></td>
+          <td>{{ brand.company }} Property Management System</td>
+        </tr>
+        <tr>
+          <td><strong>Template Version</strong></td>
+          <td>2.1 (Kenya Standard - Professional)</td>
+        </tr>
+        <tr>
+          <td><strong>Verification URL</strong></td>
+          <td>{{ brand.verification_url }}/verify/{{ contract.id }}</td>
+        </tr>
+        <tr>
+          <td><strong>Contract Status</strong></td>
+          <td>{{ contract.status|upper }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div
+      style="
+        margin-top: 30px;
+        padding: 15px;
+        background: #f5f5f5;
+        border-left: 4px solid #2e7d32;
+      "
+    >
+      <p style="margin: 0; font-size: 10px; line-height: 1.6">
+        <strong>Legal Notice:</strong> This digitally signed document is legally
+        binding under Kenya's Evidence Act (Cap 80) and the Kenya Information
+        and Communications Act. The cryptographic hashes above can be
+        independently verified for authenticity. Any tampering with the document
+        will invalidate the signature hashes. This document is stored securely
+        and can be verified at the URL provided above.
+      </p>
+    </div>
+    {% endif %}
+
+    <!-- PREPARED BY -->
+    <div class="prepared-by">
+      <p><strong>Prepared by:</strong></p>
+      <p><strong>{{ brand.company or 'Property Management' }}</strong></p>
+      <p>P.O Box {{ brand.postal_address or '________________' }}</p>
+      <p>{{ brand.city or 'Nairobi' }}</p>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      <p><strong>{{ brand.company or 'PROPERTY MANAGEMENT' }}</strong></p>
+      <p>
+        P.O Box {{ brand.postal_address or '________________' }}, {{ brand.city
+        or 'Nairobi' }}
+      </p>
+      <p>
+        Tel: {{ brand.phone }} | Email: {{ brand.email }}{% if brand.website %}
+        | Web: {{ brand.website }}{% endif %}
+      </p>
+      <p style="margin-top: 10px"><em>Generated on {{ today }}</em></p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+version: v0.12.0
+
+log:
+  level: debug
+
+serve:
+  api:
+    read:
+      port: 4466
+    write:
+      port: 4467
+
+dsn: memory

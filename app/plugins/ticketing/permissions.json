@@ -1,0 +1,5 @@
+[
+    "ticketing.*",
+    "ticketing.create",
+    "ticketing.view"
+]

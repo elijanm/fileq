@@ -1,0 +1,430 @@
+services:
+  # --------------------------
+  # FileQ API + Workers
+  # --------------------------
+  api:
+    build: ./app
+    container_name: fileq_api
+    command: uvicorn main:app --host 0.0.0.0 --port 8710 --reload
+    volumes:
+      - ./app:/app
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/fileq
+      - REDIS_URL=redis://:SuperSecretPass123@redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - LAGO_URL=http://lago-api:8724
+      - LAGO_API_KEY=your_lago_api_key
+    depends_on:
+      - mongo
+      - redis
+      - rabbitmq
+      - minio
+      - lago-api
+    ports:
+      - "8710:8710"
+
+  worker:
+    build: ./app/workers
+    container_name: fileq_worker
+    command: dramatiq tasks --processes 2 --threads 8
+    volumes:
+      - ./workers:/workers
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/fileq
+      - REDIS_URL=redis://:SuperSecretPass123@redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    depends_on:
+      - mongo
+      - redis
+      - rabbitmq
+      - minio
+
+  # --------------------------
+  # Databases & Messaging
+  # --------------------------
+  mongo:
+    image: mongo:7
+    container_name: fileq_mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    ports:
+      - "8711:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+
+  redis:
+    image: redis:7
+    container_name: fileq_redis
+    restart: always
+    ports:
+      - "8712:6379"
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: fileq_rabbitmq
+    restart: always
+    ports:
+      - "8713:5672"
+      - "8727:15672" # mgmt UI
+
+  minio:
+    image: minio/minio:latest
+    container_name: fileq_minio
+    command: server /data/disk{1...4} --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_NOTIFY_WEBHOOK_ENABLE_minio_worker_hook: "on"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_minio_worker_hook: "http://minio-worker:8000/notifications"
+    volumes:
+      - minio_data:/data
+      - minio_config:/root/.minio.sys
+    ports:
+      - "8714:9000"
+      - "8715:9001"
+    entrypoint: |
+      sh -c '
+      mkdir -p /data/disk1 /data/disk2 /data/disk3 /data/disk4
+      exec minio server /data/disk{1...4} --console-address ":9001"
+      '
+  minio-worker:
+    build: ./minio-worker
+    volumes:
+      - ./minio-worker:/app
+    depends_on:
+      - minio
+    ports:
+      - "8730:8000"
+    environment:
+      - MC_HOST_myminio=http://minioadmin:minioadmin@minio:9000
+
+  # --------------------------
+  # ORY stack (identity/auth)
+  # --------------------------
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    command: migrate sql -e --yes
+    environment:
+      - DSN=postgres://kratos:kratos@kratos-db:5432/kratos?sslmode=disable
+    depends_on:
+      - kratos-db
+    restart: "no"
+  kratos:
+    image: oryd/kratos:latest
+    container_name: fileq_kratos
+    command: serve --config /etc/config/kratos.yml
+    volumes:
+      - ./ory/kratos.yml:/etc/config/kratos.yml
+      - ./ory/identity.schema.json:/etc/config/kratos/identity.schema.json
+    environment:
+      - COURIER_SMTP_CONNECTION_URI=smtps://info:Ben@2025#@mail.ivav.org:587/
+      - COURIER_SMTP_FROM_ADDRESS=no-reply@ivav.org
+    depends_on:
+      - kratos-db
+
+    ports:
+      - "8716:4433"
+      - "8717:4434" #admin_url
+  kratos-courier:
+    image: oryd/kratos:latest
+    command: courier watch --config /etc/config/kratos.yml
+    volumes:
+      - ./ory/kratos.yml:/etc/config/kratos.yml
+      - ./ory/identity.schema.json:/etc/config/kratos/identity.schema.json
+    environment:
+      - COURIER_SMTP_CONNECTION_URI=smtp://info%40ivav.org:Ben%402025%23@mail.ivav.org:587/?skip_ssl_verify=true
+      - COURIER_SMTP_FROM_ADDRESS=no-reply@ivav.org
+    depends_on:
+      - kratos-db
+  kratos-db:
+    image: postgres:15
+    container_name: fileq_kratos_db
+    environment:
+      POSTGRES_USER: kratos
+      POSTGRES_PASSWORD: kratos
+      POSTGRES_DB: kratos
+    ports:
+      - "8740:5432"
+    volumes:
+      - kratos_db_data:/var/lib/postgresql/data
+
+  hydra:
+    image: oryd/hydra:latest
+    container_name: fileq_hydra
+    command: serve all --dev
+    environment:
+      - DSN=memory
+    ports:
+      - "8718:4444"
+      - "8719:4445"
+
+  oathkeeper:
+    image: oryd/oathkeeper:latest
+    container_name: fileq_oathkeeper
+    command: serve --config /etc/config/oathkeeper.yml
+    volumes:
+      - ./ory/oathkeeper.yml:/etc/config/oathkeeper.yml
+    ports:
+      - "8720:4455"
+      - "8721:4456"
+
+  keto:
+    image: oryd/keto:v0.12.0
+    container_name: fileq_keto
+    working_dir: /home/ory
+    command: serve --config /etc/config/keto.yml
+    volumes:
+      - ./ory/keto.yml:/etc/config/keto.yml
+      - ./ory/keto_namespaces:/home/ory/keto_namespaces
+    ports:
+      - "8722:4466" # read API
+      - "8723:4467" # write API
+
+  # --------------------------
+  # Lago API + Frontend
+  # https://hub.docker.com/r/elestio/lago-front
+  # --------------------------
+  lago-api:
+    image: elestio/lago-api:latest
+    container_name: fileq_lago_api
+    restart: always
+    command: ["./scripts/start.sh"]
+    depends_on:
+      - postgres
+      - redis
+      - lago-pdf
+    environment:
+      # Core config
+      - DATABASE_URL=postgres://lago:lago@postgres:5432/lago
+      - REDIS_URL=redis://:SuperSecretPass123@redis:6379/0
+      - RAILS_ENV=production
+      - RAILS_LOG_TO_STDOUT=true
+      - LAGO_SMTP_HOST=smtp.yourdomain.com
+      - LAGO_SMTP_PORT=587
+      - LAGO_SMTP_USERNAME=your_smtp_user
+      - LAGO_SMTP_PASSWORD=your_smtp_password
+      - LAGO_SMTP_TLS=true
+      - LAGO_FROM_EMAIL=noreply@yourdomain.com
+      - PDF_SERVICE_URL=http://fileq_lago_pdf:3000
+      - LAGO_STORAGE_PROVIDER=local
+      - LAGO_STORAGE_PATH=/lago/storage
+
+      # Optional integrations
+      - LAGO_FRONT_URL=http://95.110.228.29:8728
+      - LAGO_DISABLE_SEGMENT=true
+      - LAGO_OAUTH_PROXY_URL=https://proxy.getlago.com
+      - LAGO_RSA_PRIVATE_KEY=LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRRENlQmljUFpwdFRPZjAKYjdqb3p5dHVUYzlyMlRwdnkvdldacmlxY3E4UzdaaU1nc2xGSGRZOTBHU2ZqVm9BdlRValBQUVZQdnRoYno2cgo4YmZiWXd4S3RvVmNLNnRoMzRHWFBOcmNUaXZHSnNHTFBEcjZ1RkNqQnc1RmRVNWNWMWY2YWxLRk5ydXhONEpVCmpzYkkvOCtBR3kzQzR1UjFhVTI2eG90ODlKa0U3NkVyemp3MmtoLzNOdXo0d2pRT1ZwSk9NWGVrK1FwUHpkZDkKMXlrRkVCMyt6bkRzQVNrTU5uL2xRYm4xY1BIWHU4MC9DaHJKQ2pPK2hDcUxPWjVtNWo5NS9aTVhIbTBzRzFDVApKOWlFV3FJbGlFaUFTTlVkR2JheUloMzVSRmp6djVSSzdtOEF4NndWSGpUYjBRR05CNUxtek9lY25GWWhRdFBWCmVpNHYrQ1BaQWdNQkFBRUNnZ0VBQlc5RXhNMEY3VXNLYW03YTNJcTVuSDRKTDJybE1xMmhMcGMxVHZJZ2lXZGgKYlgvVUx4M0wySE5qOUgrSFJlRUR4S1hWN21nUnIySGovdnNrMTdrM1pUa2ZsZmxVYzBwRFBWNUNnWWlmdVl4bwp1VUxvSlF5VW1GSEFxTmxENU5tK0NDNERlMXlSdHp5bFpFYVBNSnZSaVRONVBtcUgxdTRuOFhIT0FTSjJ5a2Y1Cmg5T1RhSlpWaWF1VWJMVG8yYW80cjNkUkwvVTR6UWFZbjFQOWZDdkpQbzBqS0hyY2hSelZTako3UzVrSlJvQkgKUkVvbzQ4NDBscHpwQUx5QU51Q09iVVpVb2w0bEVWc2poOEJjVlA1bHI4S3hmN0ROYTFtTWdna1g2eVpGeFVZVgpicDIyYzR0VFJBTDlPVGRsSlhXNEpZc0tOQ0grbDNpM3FsblRMMisrK1FLQmdRRDg5bU4xTDJ0b2k1TnJ5Z1FyCldiaE9TK0ZGblREMVlENTNkT29ZaHllT2RvRW4xUXZHb2tDSm42c0hkeFMyamRHWmJVSEZuZ2F3RGdHbkhNM0cKeGtLaW5COHhFbTcrcmtEWldLUmpocmpqZjJHaG4xcjdVYkovbm1YaTM1ZUxPQnYwUFg2UndNZGVqdEwwNXd0YgpvUXhPdHE3TC9BLzczeDl6ZlY0YUN4QzQ1UUtCZ1FERXplWGpLNGRza2RuZFFVa3NWb255KzRpa3Y0ZXR2eEoyCjVoc2xrMU9BVWM1RkJSQ0FRbjZiVjl5RU4zS0xLbU5IOEEzcWhoQ0hSM2ZmelluVXgzV0RsejdwT1ZlRmZCUEsKTTNoVlNDdWIwcDNZUEY3WUtuU1ZhZ2hxVDRneGh0TDdCTklNTGNxbnhkdEJtczg5OHRsczkwWEZGT0phZVFicApxaWpjOTBiVDVRS0JnUUM3VFh6TE1qZG5pNkcydURocUdONjlLclk4bzIyeTRuYWVZUFZOQUJZc0NGY050VlFvCjJjN0xtR3c4OU5GamNwTDE5YzR6a3hVRW12cGlVSk9WVVF2Wjk1dW83Q3MvYktzYncrVEV4T1oxbk1ZZnRDemIKMWR4RFhuZTJpelJjbzBrZmljRUVEeWdRUGRTNS9iR05RU3dweEY2ZEw2QnVNUUhLczlOUG1VM2llUUtCZ1FDMgoveW1TNmFmY0dXYTJxSDBzNEM4WHBESXoxdkNIYTVMMHdoUmVCVGJ3cTZDY1p4QW40eXlzcjY4WnRpRXBMRG55CjYxRlZVR0hRR0hGcnhrZ3lkV0ZkQWViNm9GbzBnZUk0ODFFaUk2Q0JIUCt1MEx2MFRzM25IUmhFR2ozdXA0cEkKNVB1WFhZRUNMaVVwUkpVTjZtR29RK2s1VDZrR0xXRnpKc2ttWmp3U3pRS0JnR2loZ0FGenJ6MFcyWHYwY3FDSQp5WVlpdlgzK2hmQTQ3RE9YU3ErTlZ2eEgrMzRDcXNhWWw4TGltdWJmbGNxVGczV283b2F0YjdyUHNMdlZqeVlzCjBYWEZleVJWMnpRZncxYXpIbEVXOXlTQ3ZtZFVqbTFxQnVsR2NJNWtTNHZpcEZJUEEzS0g2eVIrZHpNemVFYVoKNFROcU90UHQvaEUyNjNSbEdjSzd3YjRTCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K
+
+      # Encryption keys (generate securely!)
+      - ENCRYPTION_PRIMARY_KEY=oyVQFWvCrjqkx8g7w+V6CN+P4emGMWfrsz/IzqjDhC0=
+      - ENCRYPTION_DETERMINISTIC_KEY=aaH5Un8GtHiLihiCX/RIqJ+OF4l+0g/VskRT2pDfUq4=
+      - ENCRYPTION_KEY_DERIVATION_SALT=Q08JZA+wNQfkpKecfHhuazN1XT+wuwZ3pKUij49iZnw=
+      - SECRET_KEY_BASE=de40514fab9002ea73de4f26f080d1a54b6dba3f5f650e269e3246f6b2e1a3f5fde2937ec26d56fc5642d2943cb4788182d5cb45241c834565fc58fd4967ee50
+
+      # PDF service (internal)
+      - LAGO_PDF_URL=http://lago-pdf:3000
+
+    ports:
+      - "8724:3000"
+
+  lago-front:
+    image: elestio/lago-front:latest
+    container_name: fileq_lago_front
+    restart: always
+    depends_on:
+      - lago-api
+    environment:
+      - API_URL=http://95.110.228.29:8724
+      - VITE_API_URL=http://95.110.228.29:8724
+      - APP_ENV=production
+      - CODEGEN_API=http://95.110.228.29:8724
+      - LAGO_DISABLE_SIGNUP=false
+    ports:
+      - "8728:80"
+
+  api-worker:
+    image: elestio/lago-api:latest
+    container_name: fileq_lago_worker
+    restart: always
+    depends_on:
+      - api
+    command: ["./scripts/start.worker.sh"]
+    environment:
+      - DATABASE_URL=postgres://lago:lago@postgres:5432/lago
+      - REDIS_URL=redis://:SuperSecretPass123@redis:6379/0
+      - RAILS_ENV=production
+      - RAILS_LOG_TO_STDOUT=true
+      - LAGO_RSA_PRIVATE_KEY=LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRRENlQmljUFpwdFRPZjAKYjdqb3p5dHVUYzlyMlRwdnkvdldacmlxY3E4UzdaaU1nc2xGSGRZOTBHU2ZqVm9BdlRValBQUVZQdnRoYno2cgo4YmZiWXd4S3RvVmNLNnRoMzRHWFBOcmNUaXZHSnNHTFBEcjZ1RkNqQnc1RmRVNWNWMWY2YWxLRk5ydXhONEpVCmpzYkkvOCtBR3kzQzR1UjFhVTI2eG90ODlKa0U3NkVyemp3MmtoLzNOdXo0d2pRT1ZwSk9NWGVrK1FwUHpkZDkKMXlrRkVCMyt6bkRzQVNrTU5uL2xRYm4xY1BIWHU4MC9DaHJKQ2pPK2hDcUxPWjVtNWo5NS9aTVhIbTBzRzFDVApKOWlFV3FJbGlFaUFTTlVkR2JheUloMzVSRmp6djVSSzdtOEF4NndWSGpUYjBRR05CNUxtek9lY25GWWhRdFBWCmVpNHYrQ1BaQWdNQkFBRUNnZ0VBQlc5RXhNMEY3VXNLYW03YTNJcTVuSDRKTDJybE1xMmhMcGMxVHZJZ2lXZGgKYlgvVUx4M0wySE5qOUgrSFJlRUR4S1hWN21nUnIySGovdnNrMTdrM1pUa2ZsZmxVYzBwRFBWNUNnWWlmdVl4bwp1VUxvSlF5VW1GSEFxTmxENU5tK0NDNERlMXlSdHp5bFpFYVBNSnZSaVRONVBtcUgxdTRuOFhIT0FTSjJ5a2Y1Cmg5T1RhSlpWaWF1VWJMVG8yYW80cjNkUkwvVTR6UWFZbjFQOWZDdkpQbzBqS0hyY2hSelZTako3UzVrSlJvQkgKUkVvbzQ4NDBscHpwQUx5QU51Q09iVVpVb2w0bEVWc2poOEJjVlA1bHI4S3hmN0ROYTFtTWdna1g2eVpGeFVZVgpicDIyYzR0VFJBTDlPVGRsSlhXNEpZc0tOQ0grbDNpM3FsblRMMisrK1FLQmdRRDg5bU4xTDJ0b2k1TnJ5Z1FyCldiaE9TK0ZGblREMVlENTNkT29ZaHllT2RvRW4xUXZHb2tDSm42c0hkeFMyamRHWmJVSEZuZ2F3RGdHbkhNM0cKeGtLaW5COHhFbTcrcmtEWldLUmpocmpqZjJHaG4xcjdVYkovbm1YaTM1ZUxPQnYwUFg2UndNZGVqdEwwNXd0YgpvUXhPdHE3TC9BLzczeDl6ZlY0YUN4QzQ1UUtCZ1FERXplWGpLNGRza2RuZFFVa3NWb255KzRpa3Y0ZXR2eEoyCjVoc2xrMU9BVWM1RkJSQ0FRbjZiVjl5RU4zS0xLbU5IOEEzcWhoQ0hSM2ZmelluVXgzV0RsejdwT1ZlRmZCUEsKTTNoVlNDdWIwcDNZUEY3WUtuU1ZhZ2hxVDRneGh0TDdCTklNTGNxbnhkdEJtczg5OHRsczkwWEZGT0phZVFicApxaWpjOTBiVDVRS0JnUUM3VFh6TE1qZG5pNkcydURocUdONjlLclk4bzIyeTRuYWVZUFZOQUJZc0NGY050VlFvCjJjN0xtR3c4OU5GamNwTDE5YzR6a3hVRW12cGlVSk9WVVF2Wjk1dW83Q3MvYktzYncrVEV4T1oxbk1ZZnRDemIKMWR4RFhuZTJpelJjbzBrZmljRUVEeWdRUGRTNS9iR05RU3dweEY2ZEw2QnVNUUhLczlOUG1VM2llUUtCZ1FDMgoveW1TNmFmY0dXYTJxSDBzNEM4WHBESXoxdkNIYTVMMHdoUmVCVGJ3cTZDY1p4QW40eXlzcjY4WnRpRXBMRG55CjYxRlZVR0hRR0hGcnhrZ3lkV0ZkQWViNm9GbzBnZUk0ODFFaUk2Q0JIUCt1MEx2MFRzM25IUmhFR2ozdXA0cEkKNVB1WFhZRUNMaVVwUkpVTjZtR29RK2s1VDZrR0xXRnpKc2ttWmp3U3pRS0JnR2loZ0FGenJ6MFcyWHYwY3FDSQp5WVlpdlgzK2hmQTQ3RE9YU3ErTlZ2eEgrMzRDcXNhWWw4TGltdWJmbGNxVGczV283b2F0YjdyUHNMdlZqeVlzCjBYWEZleVJWMnpRZncxYXpIbEVXOXlTQ3ZtZFVqbTFxQnVsR2NJNWtTNHZpcEZJUEEzS0g2eVIrZHpNemVFYVoKNFROcU90UHQvaEUyNjNSbEdjSzd3YjRTCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K
+
+      # Encryption keys (generate securely!)
+      - ENCRYPTION_PRIMARY_KEY=oyVQFWvCrjqkx8g7w+V6CN+P4emGMWfrsz/IzqjDhC0=
+      - ENCRYPTION_DETERMINISTIC_KEY=aaH5Un8GtHiLihiCX/RIqJ+OF4l+0g/VskRT2pDfUq4=
+      - ENCRYPTION_KEY_DERIVATION_SALT=Q08JZA+wNQfkpKecfHhuazN1XT+wuwZ3pKUij49iZnw=
+      - SECRET_KEY_BASE=de40514fab9002ea73de4f26f080d1a54b6dba3f5f650e269e3246f6b2e1a3f5fde2937ec26d56fc5642d2943cb4788182d5cb45241c834565fc58fd4967ee50
+
+    volumes:
+      - ./storage/lago_storage_data:/app/storage
+
+  api-clock:
+    image: elestio/lago-api:latest
+    container_name: fileq_lago_clock
+    restart: always
+    depends_on:
+      - api
+    command: ["./scripts/start.clock.sh"]
+    environment:
+      - DATABASE_URL=postgres://lago:lago@postgres:5432/lago
+      - REDIS_URL=redis://:SuperSecretPass123@redis:6379/0
+      - RAILS_ENV=production
+      - RAILS_LOG_TO_STDOUT=true
+      - LAGO_RSA_PRIVATE_KEY=LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRRENlQmljUFpwdFRPZjAKYjdqb3p5dHVUYzlyMlRwdnkvdldacmlxY3E4UzdaaU1nc2xGSGRZOTBHU2ZqVm9BdlRValBQUVZQdnRoYno2cgo4YmZiWXd4S3RvVmNLNnRoMzRHWFBOcmNUaXZHSnNHTFBEcjZ1RkNqQnc1RmRVNWNWMWY2YWxLRk5ydXhONEpVCmpzYkkvOCtBR3kzQzR1UjFhVTI2eG90ODlKa0U3NkVyemp3MmtoLzNOdXo0d2pRT1ZwSk9NWGVrK1FwUHpkZDkKMXlrRkVCMyt6bkRzQVNrTU5uL2xRYm4xY1BIWHU4MC9DaHJKQ2pPK2hDcUxPWjVtNWo5NS9aTVhIbTBzRzFDVApKOWlFV3FJbGlFaUFTTlVkR2JheUloMzVSRmp6djVSSzdtOEF4NndWSGpUYjBRR05CNUxtek9lY25GWWhRdFBWCmVpNHYrQ1BaQWdNQkFBRUNnZ0VBQlc5RXhNMEY3VXNLYW03YTNJcTVuSDRKTDJybE1xMmhMcGMxVHZJZ2lXZGgKYlgvVUx4M0wySE5qOUgrSFJlRUR4S1hWN21nUnIySGovdnNrMTdrM1pUa2ZsZmxVYzBwRFBWNUNnWWlmdVl4bwp1VUxvSlF5VW1GSEFxTmxENU5tK0NDNERlMXlSdHp5bFpFYVBNSnZSaVRONVBtcUgxdTRuOFhIT0FTSjJ5a2Y1Cmg5T1RhSlpWaWF1VWJMVG8yYW80cjNkUkwvVTR6UWFZbjFQOWZDdkpQbzBqS0hyY2hSelZTako3UzVrSlJvQkgKUkVvbzQ4NDBscHpwQUx5QU51Q09iVVpVb2w0bEVWc2poOEJjVlA1bHI4S3hmN0ROYTFtTWdna1g2eVpGeFVZVgpicDIyYzR0VFJBTDlPVGRsSlhXNEpZc0tOQ0grbDNpM3FsblRMMisrK1FLQmdRRDg5bU4xTDJ0b2k1TnJ5Z1FyCldiaE9TK0ZGblREMVlENTNkT29ZaHllT2RvRW4xUXZHb2tDSm42c0hkeFMyamRHWmJVSEZuZ2F3RGdHbkhNM0cKeGtLaW5COHhFbTcrcmtEWldLUmpocmpqZjJHaG4xcjdVYkovbm1YaTM1ZUxPQnYwUFg2UndNZGVqdEwwNXd0YgpvUXhPdHE3TC9BLzczeDl6ZlY0YUN4QzQ1UUtCZ1FERXplWGpLNGRza2RuZFFVa3NWb255KzRpa3Y0ZXR2eEoyCjVoc2xrMU9BVWM1RkJSQ0FRbjZiVjl5RU4zS0xLbU5IOEEzcWhoQ0hSM2ZmelluVXgzV0RsejdwT1ZlRmZCUEsKTTNoVlNDdWIwcDNZUEY3WUtuU1ZhZ2hxVDRneGh0TDdCTklNTGNxbnhkdEJtczg5OHRsczkwWEZGT0phZVFicApxaWpjOTBiVDVRS0JnUUM3VFh6TE1qZG5pNkcydURocUdONjlLclk4bzIyeTRuYWVZUFZOQUJZc0NGY050VlFvCjJjN0xtR3c4OU5GamNwTDE5YzR6a3hVRW12cGlVSk9WVVF2Wjk1dW83Q3MvYktzYncrVEV4T1oxbk1ZZnRDemIKMWR4RFhuZTJpelJjbzBrZmljRUVEeWdRUGRTNS9iR05RU3dweEY2ZEw2QnVNUUhLczlOUG1VM2llUUtCZ1FDMgoveW1TNmFmY0dXYTJxSDBzNEM4WHBESXoxdkNIYTVMMHdoUmVCVGJ3cTZDY1p4QW40eXlzcjY4WnRpRXBMRG55CjYxRlZVR0hRR0hGcnhrZ3lkV0ZkQWViNm9GbzBnZUk0ODFFaUk2Q0JIUCt1MEx2MFRzM25IUmhFR2ozdXA0cEkKNVB1WFhZRUNMaVVwUkpVTjZtR29RK2s1VDZrR0xXRnpKc2ttWmp3U3pRS0JnR2loZ0FGenJ6MFcyWHYwY3FDSQp5WVlpdlgzK2hmQTQ3RE9YU3ErTlZ2eEgrMzRDcXNhWWw4TGltdWJmbGNxVGczV283b2F0YjdyUHNMdlZqeVlzCjBYWEZleVJWMnpRZncxYXpIbEVXOXlTQ3ZtZFVqbTFxQnVsR2NJNWtTNHZpcEZJUEEzS0g2eVIrZHpNemVFYVoKNFROcU90UHQvaEUyNjNSbEdjSzd3YjRTCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K
+
+      # Encryption keys (generate securely!)
+      - ENCRYPTION_PRIMARY_KEY=oyVQFWvCrjqkx8g7w+V6CN+P4emGMWfrsz/IzqjDhC0=
+      - ENCRYPTION_DETERMINISTIC_KEY=aaH5Un8GtHiLihiCX/RIqJ+OF4l+0g/VskRT2pDfUq4=
+      - ENCRYPTION_KEY_DERIVATION_SALT=Q08JZA+wNQfkpKecfHhuazN1XT+wuwZ3pKUij49iZnw=
+      - SECRET_KEY_BASE=de40514fab9002ea73de4f26f080d1a54b6dba3f5f650e269e3246f6b2e1a3f5fde2937ec26d56fc5642d2943cb4788182d5cb45241c834565fc58fd4967ee50
+
+    volumes:
+      - ./storage/lago_storage_data:/app/storage
+
+  lago-pdf:
+    image: getlago/lago-gotenberg:7
+    container_name: fileq_lago_pdf
+    restart: always
+    ports:
+      - "8729:3000"
+    volumes:
+      - ./storage/lago_storage_data:/app/storage
+
+  postgres:
+    image: postgres:15
+    container_name: fileq_postgres
+    environment:
+      POSTGRES_USER: lago
+      POSTGRES_PASSWORD: lago
+      POSTGRES_DB: lago
+    volumes:
+      - lago_data:/var/lib/postgresql/data
+    ports:
+      - "8725:5432"
+
+  # --------------------------
+  # React UI
+  # --------------------------
+  ui:
+    build: ./ui
+    container_name: fileq_ui
+    volumes:
+      - ./ui:/ui
+    ports:
+      - "8726:80"
+    depends_on:
+      - api
+  # wekandb:
+  #   image: mongo:5
+  #   restart: always
+  #   ports:
+  #     - "8731:27017"
+  #   volumes:
+  #     - wekan-db:/data/db
+
+  # wekan:
+  #   image: ghcr.io/wekan/wekan:latest
+  #   restart: always
+  #   ports:
+  #     - "8732:8080"
+  #   environment:
+  #     - MONGO_URL=mongodb://wekandb:27017/wekan
+  #     - ROOT_URL=http://95.110.228.29:8732
+  #     - PORT=8080
+  #   depends_on:
+  #     - wekandb
+  postgresplanka:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: planka
+    volumes:
+      - postgres-data-pl:/var/lib/postgresql/data
+    ports:
+      - "8731:5432" # optional: expose Postgres for debugging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d planka"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  planka:
+    image: ghcr.io/plankanban/planka:latest
+    restart: always
+    ports:
+      - "8732:1337" # Planka UI/API exposed at http://<server-ip>:8732
+    environment:
+      - BASE_URL=http://95.110.228.29:8732 # 👈 must match how clients access it
+      - SECRET_KEY=supersecret123 # 🔑 change to a long random string
+      - DATABASE_URL=postgres://postgres:postgres@postgresplanka:5432/planka
+      - DEFAULT_ADMIN_EMAIL=demo@demo.demo
+      - DEFAULT_ADMIN_PASSWORD=demo
+      - DEFAULT_ADMIN_NAME="Admin User"
+      - DEFAULT_ADMIN_USERNAME=admin
+    depends_on:
+      postgresplanka:
+        condition: service_healthy
+    volumes:
+      - planka-uploads:/app/public/user-avatars
+      - planka-uploads:/app/public/project-background-images
+      - planka-uploads:/app/public/attachments
+  dramatiq-worker:
+    build: ./app
+    container_name: dramatiq_worker
+    command: dramatiq app.workers.tasks --processes 2 --threads 4
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mongo-primary
+    restart: always
+
+  scheduler:
+    build: ./app
+    container_name: app_scheduler
+    command: python -m app.workers.scheduler
+    env_file:
+      - .env
+    depends_on:
+      - api
+    restart: always
+
+  dramatiq-web:
+    image: ghcr.io/bogdan/dramatiq-web:latest
+    container_name: dramatiq_dashboard
+    ports:
+      - "8888:8733"
+    environment:
+      BROKER_URL: redis://redis:6379/0
+    depends_on:
+      - api
+    restart: always
+volumes:
+  mongo_data:
+  minio_data:
+  lago_data:
+  kratos_db_data:
+  minio_config:
+  postgres-data-pl:
+  planka-uploads:

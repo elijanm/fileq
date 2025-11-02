@@ -1,0 +1,139 @@
+version: "3.1"
+
+intents:
+  - greet
+  - select_role
+  - provide_contact
+  - select_certification
+  - upload_preference
+  - notification_preference
+  - provide_info
+  - goodbye
+
+entities:
+  - phone_number
+  - email
+  - location
+  - availability
+  - credentials
+  - name
+
+slots:
+  user_role:
+    type: categorical
+    values:
+      - caregiver
+      - afh_provider
+      - service_provider
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  contact_info:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  is_registered:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  name:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: name
+
+  location:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: location
+
+  availability:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: availability
+
+  credentials:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: credentials
+
+forms:
+  caregiver_registration_form:
+    required_slots:
+      - name
+      - location
+      - availability
+      - credentials
+
+responses:
+  utter_welcome:
+    - text: "I'm sorry, I didn't understand that. Could you please rephrase?"
+
+  utter_role_selection:
+    - text: "Welcome to AFHSync! Choose your role: 1) Caregiver 2) AFH Provider 3) Service Provider"
+
+  utter_ask_contact:
+    - text: "Please provide your phone number or email to check your registration status."
+
+  utter_new_user_welcome:
+    - text: "Welcome to AFHSync! Let's get you registered."
+
+  utter_caregiver_services:
+    - text: "Caregiver Services: 1) Browse job openings 2) Update availability 3) View applications"
+
+  utter_afh_services:
+    - text: "AFH Provider Services: 1) Post job opening 2) Browse caregivers 3) Manage postings"
+
+  utter_service_provider_services:
+    - text: "Service Provider Options: 1) List your services 2) Browse AFH requests 3) Update offerings"
+
+  utter_ask_name:
+    - text: "What's your full name?"
+
+  utter_ask_location:
+    - text: "What city or area are you located in?"
+
+  utter_ask_availability:
+    - text: "When are you available to work?"
+
+  utter_ask_credentials:
+    - text: "What certifications do you have? 1) CNA 2) HCA 3) RN 4) CPR 5) First Aid 6) Other/None"
+
+  utter_ask_upload_preference:
+    - text: "Would you like to upload your certification documents now or later?"
+
+  utter_upload_now:
+    - text: "Upload your documents at: https://afhsync.com/upload/{contact_info}"
+
+  utter_upload_later:
+    - text: "No problem! You can upload documents later from your profile."
+
+  utter_ask_notification_method:
+    - text: "How would you like to receive notifications? Type 'mobile' for SMS or 'email' for email"
+
+  utter_registration_complete:
+    - text: "Registration complete! Here's your personalized link: https://afhsync.com/jobs/{contact_info}"
+
+  utter_goodbye:
+    - text: "Thank you for using AFHSync! Have a great day!"
+
+actions:
+  - action_set_role
+  - action_check_registration
+  - action_show_services
+  - action_handle_certification_selection
+  - action_handle_upload_preference
+  - action_handle_notification_preference
+  - action_generate_link

@@ -1,0 +1,132 @@
+model,avg_latency,std_latency,avg_tokens_per_sec,avg_tokens_generated,accuracy
+qwen2.5:7b,42.00887456536293,12.773301172370815,9.45912445112633,398.375,1.0
+qwen2.5:7b,40.90837198495865,16.254671782759054,9.426531115905608,387.5,
+deepseek-r1:7b,60.01534676551819,16.998516951797008,8.969325755005698,512.0,1.0
+deepseek-r1:1.5b,2.0167051553726196,0.5050888513680295,202.63287931394842,434.5,1.0
+
+
+services:
+  # PostgreSQL Database for MLflow metadata
+  postgres:
+    image: postgres:16-alpine
+    container_name: mlflow_postgres
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow_secure_pass_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "8810:5432"
+    networks:
+      - mlflow_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MinIO Object Storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: mlflow_minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_change_me}
+      MINIO_DOMAIN: minio
+    volumes:
+      - minio_data:/data
+    ports:
+      - "8811:9000"      # MinIO API
+      - "8812:9001"      # MinIO Console
+    command: server /data --console-address ":9001"
+    networks:
+      - mlflow_network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # MinIO Client to create bucket on startup
+  minio_init:
+    image: minio/mc:latest
+    container_name: mlflow_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_change_me}
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set minio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb minio/mlflow --ignore-existing;
+      /usr/bin/mc anonymous set download minio/mlflow;
+      /usr/bin/mc admin user add minio mlflow_user ${MLFLOW_S3_SECRET_KEY:-mlflow_s3_key_change_me};
+      /usr/bin/mc admin policy attach minio readwrite --user mlflow_user;
+      exit 0;
+      "
+    networks:
+      - mlflow_network
+
+  # MLflow Tracking Server
+  mlflow:
+    image: python:3.11-slim
+    container_name: mlflow_server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio_init:
+        condition: service_completed_successfully
+    environment:
+      # Database
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:${POSTGRES_PASSWORD:-mlflow_secure_pass_change_me}@postgres:5432/mlflow
+      
+      # MinIO S3 Configuration
+      MLFLOW_ARTIFACT_ROOT: s3://mlflow/
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin_change_me}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      MLFLOW_S3_IGNORE_TLS: "true"
+      
+      # MLflow Settings
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_USERNAME:-admin}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_PASSWORD:-admin_change_me}
+    ports:
+      - "8813:5000"
+    volumes:
+      - ./mlflow_data:/mlflow
+    working_dir: /mlflow
+    command: >
+      /bin/sh -c "
+      pip install --no-cache-dir mlflow[extras]==2.18.0 boto3 psycopg2-binary;
+      mlflow server
+        --backend-store-uri postgresql://mlflow:${POSTGRES_PASSWORD:-mlflow_secure_pass_change_me}@postgres:5432/mlflow
+        --default-artifact-root s3://mlflow/
+        --host 0.0.0.0
+        --port 5000
+        --serve-artifacts
+      "
+    networks:
+      - mlflow_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  mlflow_network:
+    driver: bridge

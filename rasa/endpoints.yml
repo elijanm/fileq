@@ -1,0 +1,54 @@
+# --- RASA ENDPOINTS CONFIGURATION ---
+
+# Action server endpoint
+action_endpoint:
+  url: "http://action_server:5055/webhook"
+
+# Tracker store (for conversation persistence)
+tracker_store:
+  type: SQL
+  dialect: "sqlite"
+  db: "rasa_conversations.db"
+  username: null
+  password: null
+  # query:
+  #   pool_size: 10
+  #   pool_recycle: 3600
+
+# Event broker (for real-time events)
+event_broker:
+  type: "file"
+  path: "events.log"
+
+# Model server (if using remote model)
+# model:
+#   url: "http://localhost:5000"
+#   token: ""
+#   wait_time_between_pulls: 10
+
+# NLU endpoint (if using separate NLU server)
+# nlu:
+#   url: "http://localhost:5000"
+
+# Lock store (for concurrent access)
+lock_store:
+  type: "in_memory"
+
+# Production settings (uncomment for production)
+# tracker_store:
+#   type: SQL
+#   dialect: "postgresql"
+#   url: "postgresql://username:password@localhost:5432/rasa_db"
+#   login_db: "postgres"
+
+# event_broker:
+#   type: "sql"
+#   dialect: "postgresql"
+#   url: "postgresql://username:password@localhost:5432/rasa_events"
+
+# lock_store:
+#   type: "redis"
+#   url: "redis://localhost:6379/1"
+#   key_prefix: "rasa_lock:"
+environment:
+  PYTHONWARNINGS: "ignore"

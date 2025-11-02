@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>AFHSync Chat</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/chat.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/themes.css') }}"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="theme-{{ theme }}">
+    <!-- Connection Status Banner -->
+    <div class="connection-status" id="connectionStatus">
+      <span class="status-icon">⚠️</span>
+      <span class="status-text">Reconnecting...</span>
+    </div>
+
+    <!-- Main Chat Container -->
+    <div class="chat-container">
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <div class="header-content">
+          <div class="avatar">
+            <img
+              src="{{ url_for('static', path='/images/logo.png') }}"
+              alt="AFHSync"
+              onerror="this.style.display='none'"
+            />
+            <span class="avatar-fallback">A</span>
+          </div>
+          <div class="header-info">
+            <h1 class="header-title">AFHSync</h1>
+            <p class="header-status" id="statusText">
+              <span class="status-dot"></span>
+              <span>Online</span>
+            </p>
+          </div>
+        </div>
+        <!-- In templates/chat.html - Add after header -->
+        <div class="context-banner" id="contextBanner">
+          <div class="context-icon">👤</div>
+          <div class="context-info">
+            <div class="context-name" id="contextName"></div>
+            <div class="context-details" id="contextDetails"></div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="themeBtn" title="Change theme">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="menuBtn" title="Menu">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="12" cy="5" r="1" />
+              <circle cx="12" cy="19" r="1" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Messages Container -->
+      <div class="messages-container" id="messagesContainer">
+        <div class="date-divider">
+          <span>Today</span>
+        </div>
+
+        <div class="message bot-message">
+          <div class="message-content">
+            <div class="message-bubble">
+              <div class="message-text">Connecting...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Typing Indicator -->
+        <div class="typing-indicator" id="typingIndicator">
+          <div class="message-content">
+            <div class="message-bubble">
+              <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Container -->
+      <div class="input-container">
+        <button class="icon-btn" id="attachBtn" title="Attach file">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+            />
+          </svg>
+        </button>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="messageInput"
+            placeholder="Type a message..."
+            autocomplete="off"
+            maxlength="500"
+          />
+        </div>
+        <button class="send-btn" id="sendButton" disabled>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Theme Picker Modal -->
+    <div class="modal" id="themeModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Choose Theme</h3>
+          <button class="close-btn" id="closeModal">&times;</button>
+        </div>
+        <div class="theme-grid">
+          <div class="theme-option" data-theme="green">
+            <div class="theme-preview theme-green-preview"></div>
+            <span>Classic Green</span>
+          </div>
+          <div class="theme-option" data-theme="blue">
+            <div class="theme-preview theme-blue-preview"></div>
+            <span>Ocean Blue</span>
+          </div>
+          <div class="theme-option" data-theme="purple">
+            <div class="theme-preview theme-purple-preview"></div>
+            <span>Royal Purple</span>
+          </div>
+          <div class="theme-option" data-theme="pink">
+            <div class="theme-preview theme-pink-preview"></div>
+            <span>Sunset Pink</span>
+          </div>
+          <div class="theme-option" data-theme="dark">
+            <div class="theme-preview theme-dark-preview"></div>
+            <span>Dark Mode</span>
+          </div>
+          <div class="theme-option" data-theme="teal">
+            <div class="theme-preview theme-teal-preview"></div>
+            <span>Fresh Teal</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SESSION_ID = "{{ session_id }}";
+      const WS_PROTOCOL =
+        window.location.protocol === "https:" ? "wss:" : "ws:";
+      const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws/${SESSION_ID}`;
+    </script>
+    <script src="{{ url_for('static', path='/js/chat.js') }}"></script>
+  </body>
+</html>

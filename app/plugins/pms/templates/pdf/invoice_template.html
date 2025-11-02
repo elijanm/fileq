@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoice</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 1in;
+        @bottom-center {
+          content: "Page " counter(page) " of " counter(pages);
+        }
+      }
+
+      body {
+        font-family: "Helvetica", Arial, sans-serif;
+        color: #333;
+        background: url("{{ brand.watermark }}") no-repeat center center;
+        background-size: 60%;
+        opacity: 0.99;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 3px solid {{ brand.color }};
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+      }
+
+      header img {
+        height: 60px;
+      }
+
+      h1 {
+        color: {{ brand.color }};
+        font-size: 28px;
+        margin: 0;
+      }
+
+      .info {
+        margin-bottom: 30px;
+      }
+
+      .info p {
+        line-height: 1.4;
+        margin: 0 0 5px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        page-break-inside: auto;
+      }
+
+      th, td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        font-size: 14px;
+      }
+
+      th {
+        background: #f4f4f4;
+        color: #222;
+      }
+
+      tr:nth-child(even) {
+        background: #fafafa;
+      }
+
+      .total {
+        text-align: right;
+        font-weight: bold;
+      }
+
+      .footer {
+        margin-top: 40px;
+        border-top: 2px solid {{ brand.color }};
+        padding-top: 10px;
+        font-size: 12px;
+        text-align: center;
+        color: #666;
+      }
+
+      .signature {
+        margin-top: 40px;
+        text-align: right;
+      }
+
+      .signature img {
+        width: 150px;
+      }
+
+      .break {
+        page-break-after: always;
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <div>
+        <img src="{{ brand.logo }}" alt="Logo" />
+      </div>
+      <div>
+        <h1>INVOICE</h1>
+        <p><strong>Date:</strong> {{ today }}</p>
+        <p><strong>Month:</strong> {{ invoice.month }}</p>
+      </div>
+    </header>
+
+    <div class="info">
+      <p><strong>Tenant:</strong> {{ tenant.full_name }}</p>
+      <p>
+        <strong>Property:</strong> {{ property.name }} - {{ property.location }}
+      </p>
+      <p><strong>Unit ID:</strong> {{ invoice.unit_id }}</p>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Amount ($)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in invoice["items"] %}
+        <tr>
+          <td>{{ item.label }}</td>
+          <td>{{ '%.2f'|format(item.amount) }}</td>
+        </tr>
+        {% endfor %} {% if invoice.late_fee and invoice.late_fee > 0 %}
+        <tr>
+          <td>Late Fee</td>
+          <td>{{ '%.2f'|format(invoice.late_fee) }}</td>
+        </tr>
+        {% endif %}
+        <tr class="total">
+          <td>Total</td>
+          <td>{{ '%.2f'|format(invoice.total) }}</td>
+        </tr>
+        <tr class="total">
+          <td>Paid</td>
+          <td>{{ '%.2f'|format(invoice.paid_amount) }}</td>
+        </tr>
+        <tr class="total">
+          <td>Balance</td>
+          <td>{{ '%.2f'|format(invoice.balance) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {% if water_chart %}
+    <div class="break"></div>
+    <h2 style="color:{{ brand.color }};margin-top:40px;">
+      Water Usage Overview
+    </h2>
+    <p style="font-size: 12px; color: #555">
+      Historical water consumption (m³) per month.
+    </p>
+    <img
+      src="{{ water_chart }}"
+      style="width: 90%; max-height: 250px; display: block; margin: 10px auto"
+    />
+    {% endif %}
+
+    <div class="signature">
+      <p>Authorized by:</p>
+      <p><strong>{{ brand.signature }}</strong></p>
+    </div>
+
+    <div class="footer">
+      <p>{{ brand.company }} | Confidential Document</p>
+      <p>Generated on {{ today }}</p>
+    </div>
+  </body>
+</html>

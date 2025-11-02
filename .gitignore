@@ -2,7 +2,6 @@ node_modules/
 # Security
 secrets/private_key.pem
 ssl/
-/venv
 
 
 # Byte-compiled / optimized / compiled files
@@ -21,6 +20,8 @@ dist/
 *.egg-info/
 *.egg
 
+#Test
+.pytest_cache/
 # Environments
 .env
 venv/
@@ -33,3 +34,7 @@ env/
 # Logs and temp files
 *.log
 *.tmp
+
+app/uploader/
+app/media/
+app/uploads

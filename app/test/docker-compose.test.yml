@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  auth-api-test:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      - KRATOS_PUBLIC_URL=http://kratos-test:4433
+      - REDIS_URL=redis://redis-test:6379
+      - MONGODB_URI=mongodb://mongodb-test:27017/test_auth_db
+      - ENCRYPTION_KEY=test-encryption-key-32-bytes-long
+      - JWT_SECRET=test-jwt-secret-key
+      - AUDIT_RETENTION_DAYS=1
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=test
+    depends_on:
+      - redis-test
+      - kratos-test
+      - mongodb-test
+    networks:
+      - test-network
+
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    networks:
+      - test-network
+
+  kratos-test:
+    image: oryd/kratos:v1.0.0
+    ports:
+      - "4435:4433"
+      - "4436:4434"
+    environment:
+      - DSN=memory
+      - LOG_LEVEL=debug
+    volumes:
+      - ./kratos:/etc/config/kratos
+    networks:
+      - test-network
+    command: serve -c /etc/config/kratos/kratos.yml --dev
+
+  mongodb-test:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=test_auth_db
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge

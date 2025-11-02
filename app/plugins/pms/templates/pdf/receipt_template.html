@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Receipt</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 1in;
+        @bottom-center {
+          content: "Page " counter(page) " of " counter(pages);
+        }
+      }
+
+      body {
+        font-family: "Helvetica", Arial, sans-serif;
+        color: #333;
+        background: url("{{ brand.watermark }}") no-repeat center center;
+        background-size: 60%;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 3px solid {{ brand.color }};
+        padding-bottom: 10px;
+        margin-bottom: 30px;
+      }
+
+      header img {
+        height: 60px;
+      }
+
+      h1 {
+        color: {{ brand.color }};
+        font-size: 26px;
+        margin: 0;
+      }
+
+      .details {
+        margin-bottom: 20px;
+      }
+
+      .details p {
+        margin: 0 0 5px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      th, td {
+        border: 1px solid #ccc;
+        padding: 10px;
+        font-size: 14px;
+      }
+
+      th {
+        background: #f6f6f6;
+      }
+
+      .summary {
+        margin-top: 20px;
+        text-align: right;
+        font-weight: bold;
+      }
+
+      .signature {
+        margin-top: 50px;
+        text-align: right;
+      }
+
+      .signature img {
+        width: 150px;
+      }
+
+      .footer {
+        margin-top: 40px;
+        border-top: 2px solid {{ brand.color }};
+        padding-top: 10px;
+        font-size: 12px;
+        text-align: center;
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <img src="{{ brand.logo }}" alt="Logo" />
+      </div>
+      <div>
+        <h1>RECEIPT</h1>
+        <p><strong>Date:</strong> {{ today }}</p>
+        <p><strong>Receipt No:</strong> {{ payment.receipt_no }}</p>
+      </div>
+    </header>
+
+    <div class="details">
+      <p><strong>Tenant:</strong> {{ tenant.full_name }}</p>
+      <p><strong>Property:</strong> {{ property.name }}</p>
+      <p><strong>Month:</strong> {{ invoice.month }}</p>
+    </div>
+
+    <table>
+      <tr>
+        <th>Description</th>
+        <th>Amount ($)</th>
+      </tr>
+      <tr>
+        <td>Payment Received</td>
+        <td>{{ '%.2f'|format(payment.amount) }}</td>
+      </tr>
+      <tr>
+        <td>Payment Method</td>
+        <td>{{ payment.method or 'N/A' }}</td>
+      </tr>
+      <tr>
+        <td>Remaining Balance</td>
+        <td>{{ '%.2f'|format(invoice.balance) }}</td>
+      </tr>
+    </table>
+
+    <div class="summary">
+      <p>Thank you for your payment.</p>
+    </div>
+
+    <div class="signature">
+      <p>Authorized by:</p>
+      <p><strong>{{ brand.signature }}</strong></p>
+    </div>
+
+    <div class="footer">
+      <p>{{ brand.company }} | Official Receipt</p>
+      <p>Generated on {{ today }}</p>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,139 @@
+/* AFHSync Chat - Theme Variations */
+
+/* Classic Green (WhatsApp Style) */
+.theme-green {
+  --primary-color: #075e54;
+  --user-bubble-color: #dcf8c6;
+  --user-text-color: #303030;
+  --bg-pattern: #e5ddd5
+    url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAOklEQVQoU2NkYGD4z4AHMDEWMDKA6P9wBRAAU8zIyPgfLgGTYGBg+A+SMDAwMGJVCFPMyMjwHyYBALwRBAa9tDJZAAAAAElFTkSuQmCC");
+  --desktop-bg: #009688;
+}
+
+.theme-green-preview {
+  background: linear-gradient(135deg, #075e54 0%, #128c7e 100%);
+}
+
+/* Ocean Blue */
+.theme-blue {
+  --primary-color: #0084ff;
+  --user-bubble-color: #0084ff;
+  --user-text-color: #ffffff;
+  --bg-pattern: #e8f4f8
+    url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAOklEQVQoU2NkYGD4z4AHMDEWMDKA6P9wBRAAU8zIyPgfLgGTYGBg+A+SMDAwMGJVCFPMyMjwHyYBALwRBAa9tDJZAAAAAElFTkSuQmCC");
+  --desktop-bg: #0084ff;
+}
+
+.theme-blue-preview {
+  background: linear-gradient(135deg, #0084ff 0%, #00a8ff 100%);
+}
+
+/* Royal Purple */
+.theme-purple {
+  --primary-color: #7c4dff;
+  --user-bubble-color: #b39ddb;
+  --user-text-color: #1a1a1a;
+  --bg-pattern: #f3e5f5
+    url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAOklEQVQoU2NkYGD4z4AHMDEWMDKA6P9wBRAAU8zIyPgfLgGTYGBg+A+SMDAwMGJVCFPMyMjwHyYBALwRBAa9tDJZAAAAAElFTkSuQmCC");
+  --desktop-bg: #7c4dff;
+}
+
+.theme-purple-preview {
+  background: linear-gradient(135deg, #7c4dff 0%, #9c27b0 100%);
+}
+
+/* Sunset Pink */
+.theme-pink {
+  --primary-color: #e91e63;
+  --user-bubble-color: #ffcce5;
+  --user-text-color: #1a1a1a;
+  --bg-pattern: #fce4ec
+    url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAOklEQVQoU2NkYGD4z4AHMDEWMDKA6P9wBRAAU8zIyPgfLgGTYGBg+A+SMDAwMGJVCFPMyMjwHyYBALwRBAa9tDJZAAAAAElFTkSuQmCC");
+  --desktop-bg: #e91e63;
+}
+
+.theme-pink-preview {
+  background: linear-gradient(135deg, #e91e63 0%, #f06292 100%);
+}
+
+/* Dark Mode */
+.theme-dark {
+  --primary-color: #1f1f1f;
+  --user-bubble-color: #005c4b;
+  --user-text-color: #ffffff;
+  --bg-pattern: #0d1418;
+  --desktop-bg: #0a0a0a;
+}
+
+.theme-dark .chat-container {
+  background: #111b21;
+}
+
+.theme-dark .messages-container {
+  background: #0d1418;
+}
+
+.theme-dark .bot-message .message-bubble {
+  background: #1f2c33;
+  color: #e9edef;
+}
+
+.theme-dark .input-container {
+  background: #1f2c33;
+}
+
+.theme-dark .input-wrapper {
+  background: #2a3942;
+}
+
+.theme-dark #messageInput {
+  color: #e9edef;
+}
+
+.theme-dark #messageInput::placeholder {
+  color: #8696a0;
+}
+
+.theme-dark .date-divider span {
+  background: #182229;
+  color: #8696a0;
+}
+
+.theme-dark .modal-content {
+  background: #1f2c33;
+  color: #e9edef;
+}
+
+.theme-dark .modal-header h3 {
+  color: #e9edef;
+}
+
+.theme-dark .theme-option {
+  color: #e9edef;
+}
+
+.theme-dark .theme-option:hover {
+  background: #2a3942;
+}
+
+.theme-dark .theme-option span {
+  color: #e9edef;
+}
+
+.theme-dark-preview {
+  background: linear-gradient(135deg, #1f1f1f 0%, #2a2a2a 100%);
+}
+
+/* Fresh Teal */
+.theme-teal {
+  --primary-color: #00bcd4;
+  --user-bubble-color: #b2ebf2;
+  --user-text-color: #1a1a1a;
+  --bg-pattern: #e0f7fa
+    url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAOklEQVQoU2NkYGD4z4AHMDEWMDKA6P9wBRAAU8zIyPgfLgGTYGBg+A+SMDAwMGJVCFPMyMjwHyYBALwRBAa9tDJZAAAAAElFTkSuQmCC");
+  --desktop-bg: #00bcd4;
+}
+
+.theme-teal-preview {
+  background: linear-gradient(135deg, #00bcd4 0%, #26c6da 100%);
+}

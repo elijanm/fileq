@@ -1,0 +1,5 @@
+[
+    "pms.*",
+    "pms.create",
+    "pms.view"
+]

@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "auth_alerts.yml"
+
+scrape_configs:
+  - job_name: "auth-api"
+    static_configs:
+      - targets: ["auth-api:8000"]
+    metrics_path: "/auth/metrics"
+    scrape_interval: 30s
+
+  - job_name: "kratos"
+    static_configs:
+      - targets: ["kratos:4434"]
+    metrics_path: "/metrics"
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093

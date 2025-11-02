@@ -1,0 +1,78 @@
+version: "3.1"
+
+stories:
+  - story: new caregiver registration flow
+    steps:
+      - intent: greet
+      - action: utter_role_selection
+      - intent: select_role
+      - action: action_set_role
+      - slot_was_set:
+          - user_role: caregiver
+      - action: utter_ask_contact
+      - intent: provide_contact
+      - action: action_check_registration
+      - slot_was_set:
+          - is_registered: false
+      - action: action_show_services
+
+  - story: returning caregiver flow
+    steps:
+      - intent: greet
+      - action: utter_role_selection
+      - intent: select_role
+      - action: action_set_role
+      - slot_was_set:
+          - user_role: caregiver
+      - action: utter_ask_contact
+      - intent: provide_contact
+      - action: action_check_registration
+      - slot_was_set:
+          - is_registered: true
+      - action: action_show_services
+
+  - story: upload preference handling
+    steps:
+      - action: utter_ask_upload_preference
+      - intent: upload_preference
+      - action: action_handle_upload_preference
+      - action: utter_ask_notification_method
+
+  - story: notification preference handling
+    steps:
+      - action: utter_ask_notification_method
+      - intent: notification_preference
+      - action: action_handle_notification_preference
+
+  - story: AFH provider flow
+    steps:
+      - intent: greet
+      - action: utter_role_selection
+      - intent: select_role
+      - action: action_set_role
+      - slot_was_set:
+          - user_role: afh_provider
+      - action: utter_ask_contact
+      - intent: provide_contact
+      - action: action_check_registration
+      - action: action_show_services
+
+  - story: service provider flow
+    steps:
+      - intent: greet
+      - action: utter_role_selection
+      - intent: select_role
+      - action: action_set_role
+      - slot_was_set:
+          - user_role: service_provider
+      - action: utter_ask_contact
+      - intent: provide_contact
+      - action: action_check_registration
+      - action: action_show_services
+
+  - story: simple greeting and goodbye
+    steps:
+      - intent: greet
+      - action: utter_role_selection
+      - intent: goodbye
+      - action: utter_goodbye

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign Contract</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f9f9f9;
+        text-align: center;
+      }
+      h2 {
+        color: #333;
+        margin-bottom: 10px;
+      }
+      #sign-pad {
+        border: 2px dashed #888;
+        width: 90vw;
+        max-width: 400px;
+        height: 200px;
+        background: #fff;
+        border-radius: 10px;
+        touch-action: none;
+      }
+      button {
+        margin-top: 20px;
+        padding: 12px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 8px;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+        width: 80%;
+        max-width: 300px;
+      }
+      button:active {
+        background-color: #0056b3;
+      }
+      .info {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>{{ role|capitalize }} Signature</h2>
+    <p class="info">Contract ID: <strong>{{ contract_id }}</strong></p>
+    <p>Please sign below to confirm your agreement.</p>
+
+    <canvas id="sign-pad"></canvas><br />
+    <button onclick="saveSig()">Submit Signature</button>
+
+    <script>
+      const canvas = document.getElementById("sign-pad");
+      const ctx = canvas.getContext("2d");
+      let drawing = false;
+
+      function resizeCanvas() {
+        const data = canvas.toDataURL();
+        canvas.width = window.innerWidth * 0.9;
+        canvas.height = 200;
+        const img = new Image();
+        img.src = data;
+        img.onload = () => ctx.drawImage(img, 0, 0);
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      function startDraw(e) {
+        drawing = true;
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+      }
+      function draw(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      function endDraw() {
+        drawing = false;
+      }
+
+      canvas.addEventListener("mousedown", startDraw);
+      canvas.addEventListener("mousemove", draw);
+      canvas.addEventListener("mouseup", endDraw);
+      canvas.addEventListener("mouseleave", endDraw);
+
+      canvas.addEventListener("touchstart", startDraw);
+      canvas.addEventListener("touchmove", draw);
+      canvas.addEventListener("touchend", endDraw);
+
+      async function saveSig() {
+        const sig = canvas.toDataURL("image/png");
+        const body = {
+          role: "{{ role }}",
+          signature: sig,
+        };
+        const resp = await fetch(
+          `/pms/property/contracts/{{ contract_id }}/sign`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        );
+        const result = await resp.json();
+        if (resp.ok) {
+          alert(`✅ ${result.message}`);
+          window.location.href = "/thank-you";
+        } else {
+          alert(`❌ ${result.detail || result.message}`);
+        }
+      }
+    </script>
+  </body>
+</html>

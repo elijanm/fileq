@@ -1,0 +1,66 @@
+version: "3.1"
+
+rules:
+  - rule: Start conversation
+    steps:
+      - intent: greet
+      - action: utter_role_selection
+
+  - rule: Handle role selection
+    steps:
+      - intent: select_role
+      - action: action_set_role
+      - action: utter_ask_contact
+
+  - rule: Check registration after contact provided
+    steps:
+      - intent: provide_contact
+      - action: action_check_registration
+      - action: action_show_services
+
+  - rule: Start caregiver registration after welcome
+    condition:
+      - slot_was_set:
+          - user_role: caregiver
+          - is_registered: false
+    steps:
+      - action: action_show_services
+      - action: caregiver_registration_form
+      - active_loop: caregiver_registration_form
+
+  - rule: Handle form slot filling
+    condition:
+      - active_loop: caregiver_registration_form
+    steps:
+      - intent: provide_info
+      - action: caregiver_registration_form
+
+  - rule: Complete caregiver registration
+    condition:
+      - active_loop: caregiver_registration_form
+    steps:
+      - action: caregiver_registration_form
+      - active_loop: null
+      - action: utter_registration_complete
+
+  - rule: Handle certification selection
+    steps:
+      - intent: select_certification
+      - action: action_handle_certification_selection
+      - action: utter_ask_upload_preference
+
+  - rule: Handle upload preference
+    steps:
+      - intent: upload_preference
+      - action: action_handle_upload_preference
+      - action: utter_ask_notification_method
+
+  - rule: Handle notification preference
+    steps:
+      - intent: notification_preference
+      - action: action_handle_notification_preference
+
+  - rule: Handle goodbye
+    steps:
+      - intent: goodbye
+      - action: utter_goodbye

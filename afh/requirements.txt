@@ -1,0 +1,50 @@
+requests
+geopy
+sqlalchemy<2.0
+fuzzywuzzy==0.18.0
+thefuzz[speedup]==0.20.0
+# python-Levenshtein==0.21.1
+dateparser==1.1.8
+requests==2.31.0
+pymongo==4.6.1
+dnspython==2.5.0
+
+
+# PDF generation
+WeasyPrint==60.1
+
+# Additional WeasyPrint dependencies
+Pillow==11.3.0
+cffi==1.16.0
+pycparser==2.21
+cssselect2==0.7.0
+tinycss2==1.2.1
+
+# Logging (built-in, but good to specify)
+# logging - built-in
+
+# Environment variables
+python-dotenv==1.0.0
+
+
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+python-multipart==0.0.6
+jinja2==3.1.2
+
+# Redis for session management
+redis==5.0.1
+
+
+# Data validation
+pydantic==2.5.0
+
+
+mlflow 
+requests 
+numpy 
+pandas 
+matplotlib 
+seaborn

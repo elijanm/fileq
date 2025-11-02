@@ -1,0 +1,58 @@
+version: "3.1"
+
+recipe: default.v1
+
+language: en
+
+pipeline:
+  # --- TOKENIZATION ---
+  - name: WhitespaceTokenizer
+
+  # --- FEATURE EXTRACTION ---
+  - name: RegexFeaturizer
+  - name: LexicalSyntacticFeaturizer
+  - name: CountVectorsFeaturizer
+  - name: CountVectorsFeaturizer
+    analyzer: char_wb
+    min_ngram: 1
+    max_ngram: 4
+
+  # --- INTENT CLASSIFICATION ---
+  - name: DIETClassifier
+    epochs: 100
+    constrain_similarities: true
+
+  # --- ENTITY EXTRACTION ---
+  - name: RegexEntityExtractor
+    case_sensitive: false
+    use_lookup_tables: true
+    use_regexes: true
+    use_word_boundaries: true
+
+  - name: EntitySynonymMapper
+
+  # --- FALLBACK HANDLING ---
+  - name: FallbackClassifier
+    threshold: 0.7
+    ambiguity_threshold: 0.1
+
+policies:
+  # --- RULE-BASED POLICIES ---
+  - name: RulePolicy
+    core_fallback_threshold: 0.4
+    core_fallback_action_name: "utter_welcome"
+    enable_fallback_prediction: true
+
+  # --- ML POLICIES ---
+  - name: MemoizationPolicy
+    max_history: 5
+
+  - name: TEDPolicy
+    max_history: 5
+    epochs: 50
+    constrain_similarities: true
+
+  # --- FORM POLICIES ---
+  - name: UnexpecTEDIntentPolicy
+    max_history: 5
+    epochs: 50

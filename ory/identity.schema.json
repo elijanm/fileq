@@ -1,0 +1,66 @@
+{
+  "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "traits": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "title": "E-Mail",
+          "minLength": 3,
+          "ory.sh/kratos": {
+            "credentials": {
+              "password": {
+                "identifier": true
+              }
+            },
+            "verification": {
+              "via": "email"
+            },
+            "recovery": {
+              "via": "email"
+            }
+          }
+        },
+        "name": {
+          "type": "string",
+          "title": "Full Name",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "title": "Phone Number",
+          "pattern": "^\\+[1-9]\\d{1,14}$"
+        },
+        "date_of_birth": {
+          "type": "string",
+          "format": "date",
+          "title": "Date of Birth"
+        },
+        "terms_accepted": {
+          "type": "boolean",
+          "title": "Accept Terms and Conditions",
+          "const": true
+        },
+        "marketing_consent": {
+          "type": "boolean",
+          "title": "Marketing Consent",
+          "default": false
+        },
+        "preferred_language": {
+          "type": "string",
+          "title": "Preferred Language",
+          "enum": ["en", "es", "fr", "de"],
+          "default": "en"
+        }
+      },
+      "required": ["email", "name", "terms_accepted"],
+      "additionalProperties": false
+    }
+  }
+}
