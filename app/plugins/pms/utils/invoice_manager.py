@@ -6,8 +6,9 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 import calendar
-
-
+from plugins.pms.accounting.ledger import Ledger
+from core.MongoORJSONResponse import PyObjectId
+from plugins.pms.models.ledger_entry import Invoice,InvoiceLineItem,InvoiceStatus
 class LeaseStatus(str, Enum):
     PENDING = "pending"
     ACTIVE = "active"
@@ -33,16 +34,7 @@ class TaskStatus(str, Enum):
     CLOSED = "closed"
 
 
-class InvoiceStatus(str, Enum):
-    DRAFT = "draft"
-    PENDING_UTILITIES = "pending_utilities"
-    READY = "ready"
-    ISSUED = "issued"
-    PARTIALLY_PAID = "partially_paid"
-    PAID = "paid"
-    OVERDUE = "overdue"
-    CONSOLIDATED = "consolidated"  # Balance moved to new invoice
-    CANCELLED = "cancelled"
+
 
 
 class NotificationType(str, Enum):
@@ -64,19 +56,6 @@ class TicketCategory(str, Enum):
     MAINTENANCE = "maintenance"
     GENERAL = "general"
 
-
-class InvoiceLineItem(BaseModel):
-    """Line item in an invoice"""
-    id: str = Field(default_factory=lambda: str(ObjectId()), alias="_id")
-    description: str
-    amount: float
-    category: str  # rent, deposit, utility, fee, balance_brought_forward, overpayment_credit
-    usage_units: Optional[float] = None
-    rate: Optional[float] = None
-    meta: Dict = Field(default_factory=dict)
-
-    class Config:
-        populate_by_name = True
 
 
 class PaymentAllocationRule(BaseModel):
@@ -108,26 +87,7 @@ class UtilityUsageRecord(BaseModel):
     unit_of_measure: str
 
 
-class Invoice(BaseModel):
-    """Invoice structure with consolidation support"""
-    id: str = Field(default_factory=lambda: str(ObjectId()), alias="_id")
-    property_id: str
-    tenant_id: str
-    date_issued: datetime
-    due_date: datetime
-    units_id: List[str]
-    line_items: List[InvoiceLineItem] = Field(default_factory=list)
-    total_amount: float = 0.0
-    total_paid: float = 0.0
-    effective_paid: float = 0.0
-    overpaid_amount: float = 0.0
-    balance_amount: float = 0.0
-    status: InvoiceStatus
-    balance_forwarded: bool = False
-    meta: Dict = Field(default_factory=dict)
 
-    class Config:
-        populate_by_name = True
 
 
 class Task(BaseModel):
@@ -146,7 +106,7 @@ class Task(BaseModel):
 
 class Ticket(BaseModel):
     """Ticket model"""
-    id: str = Field(default_factory=lambda: str(ObjectId()), alias="_id")
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     title: str
     description: str
     status: TicketStatus
@@ -160,9 +120,15 @@ class Ticket(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
-
-    class Config:
-        populate_by_name = True
+    
+    model_config = {
+        "populate_by_name":True,
+        "json_encoders": {
+            ObjectId: str,
+            PyObjectId: str,
+        }
+    }
+    
 
 
 class Notification(BaseModel):
@@ -243,7 +209,7 @@ class AsyncLeaseInvoiceManager:
         
         # Exclude consolidated, paid, and cancelled invoices
         cursor = self.db.property_invoices.find({
-            "tenant_id": tenant_id,
+            "tenant_id": ObjectId(tenant_id),
             "balance_amount": {"$gt": 0},
             "date_issued": {"$lt": current_date},
             "status": {"$nin": [
@@ -255,6 +221,7 @@ class AsyncLeaseInvoiceManager:
         }).sort("date_issued", 1)
         
         unpaid_invoices = await cursor.to_list(length=None)
+        
         
         total_balance = 0.0
         itemized_balances = []
@@ -299,6 +266,7 @@ class AsyncLeaseInvoiceManager:
         }
         
         try:
+            #ToDo: candidate for cache
             await self._update_lease_statuses(results)
             active_leases_by_property = await self._get_active_leases_by_property()
             
@@ -440,6 +408,8 @@ class AsyncLeaseInvoiceManager:
                         utility_tasks.extend(invoice_result["utility_tasks"])
                         
             except Exception as e:
+                import traceback
+                traceback.print_exception(e)
                 results["errors"].append({
                     "lease_id": str(lease.get("_id")),
                     "error": str(e)
@@ -470,16 +440,19 @@ class AsyncLeaseInvoiceManager:
         tenant_id = str(lease["tenant_id"])
         units_id = lease["units_id"]
         
-        # Check if invoice already exists
+        # Check if invoice already exis
         existing_invoice = await self.db.property_invoices.find_one({
-            "meta.lease_id": lease_id,
+            "$or": [
+                {"lease_id": str(lease_id)},
+                {"meta.lease_id": str(lease_id)},
+            ],
             "meta.billing_period": billing_month
         })
         
         if existing_invoice and not force:
             raise ValueError(
                 f"Invoice already exists for lease {lease_id} in {billing_month}. "
-                f"Use force=True to regenerate."
+                f"Use force=True to regenerate. {existing_invoice['_id']}"
             )
         
         if existing_invoice and force:
@@ -498,7 +471,7 @@ class AsyncLeaseInvoiceManager:
         unit_numbers = []
         
         for unit_id in units_id:
-            unit = await self.db.property_units.find_one({"_id": unit_id})
+            unit = await self.db.units.find_one({"_id": str(unit_id)})
             if unit:
                 unit_number = unit.get("unitNumber", "")
                 unit_numbers.append(unit_number)
@@ -539,8 +512,9 @@ class AsyncLeaseInvoiceManager:
             "billing_period": billing_month,
             "tenant": {
                 "full_name": lease["tenant_details"]["full_name"],
-                "email": lease["tenant_details"].get("email"),
-                "phone": lease["tenant_details"].get("phone")
+                "is_lease_active":True,
+                # "email": lease["tenant_details"].get("email"),
+                # "phone": lease["tenant_details"].get("phone")
             },
             "property": {
                 "name": property_data["name"],
@@ -548,6 +522,7 @@ class AsyncLeaseInvoiceManager:
             },
             "units": units_info,
             "unit_numbers": unit_numbers,
+            "unit_numbers_str":unit_numbers_str,
             "billing_cycle": billing_cycle,
             "utilities_usage": {},
             "previous_balance_method": balance_method,
@@ -617,7 +592,7 @@ class AsyncLeaseInvoiceManager:
                 metered_utilities.append(utility)
                 
                 previous_reading = await self._get_previous_utility_reading(
-                    lease["_id"], 
+                    str(lease["_id"]), 
                     utility["name"],
                     billing_month
                 )
@@ -628,6 +603,7 @@ class AsyncLeaseInvoiceManager:
                     "tenant_name": lease["tenant_details"]["full_name"],
                     "tenant_id": tenant_id,
                     "invoice_id": invoice_id,
+                    "billing_period":billing_month,
                     "previous_reading": previous_reading,
                     "units_id": units_id,
                     "unit_numbers": unit_numbers,
@@ -717,6 +693,7 @@ class AsyncLeaseInvoiceManager:
             property_id=property_id,
             tenant_id=tenant_id,
             date_issued=self.current_date,
+            lease_id=lease_id,
             due_date=due_date,
             units_id=units_id,
             line_items=line_items,
@@ -782,7 +759,7 @@ class AsyncLeaseInvoiceManager:
             
             # Update old invoice
             await self.db.property_invoices.update_one(
-                {"_id": old_invoice_id},
+                {"_id": ObjectId(old_invoice_id)},
                 {
                     "$set": {
                         "status": InvoiceStatus.CONSOLIDATED.value,
@@ -803,7 +780,7 @@ class AsyncLeaseInvoiceManager:
     ):
         """Delete existing invoice and related tickets."""
         # Get invoice to check if it has consolidated others
-        invoice = await self.db.property_invoices.find_one({"_id": invoice_id})
+        invoice = await self.db.property_invoices.find_one({"_id": ObjectId(invoice_id)})
         
         if invoice:
             # Restore consolidated invoices
@@ -812,7 +789,7 @@ class AsyncLeaseInvoiceManager:
                 source_invoice_id = rule.get("source_invoice_id")
                 if source_invoice_id:
                     await self.db.property_invoices.update_one(
-                        {"_id": source_invoice_id},
+                        {"_id": ObjectId(source_invoice_id)},
                         {
                             "$set": {
                                 "status": InvoiceStatus.OVERDUE.value,
@@ -824,11 +801,14 @@ class AsyncLeaseInvoiceManager:
                         }
                     )
         
-        # Delete invoice and tickets
-        await self.db.property_invoices.delete_one({"_id": invoice_id})
+        # Delete invoice , tickets and ledger entries
+        await self.db.property_invoices.delete_one({"_id": ObjectId(invoice_id)})
         await self.db.property_tickets.delete_many({
             "metadata.billing_month": billing_month,
             "tasks.metadata.invoice_id": invoice_id
+        })
+        await self.db.property_ledger_entries.delete_many({
+            "invoice_id":  ObjectId(invoice_id)
         })
     
     async def _create_property_ticket(
@@ -1059,7 +1039,7 @@ class AsyncLeaseInvoiceManager:
         usage_key = f"{usage_record.utility_name.lower().replace(' ', '_')}_usage"
         
         await self.db.property_invoices.update_one(
-            {"_id": invoice_id},
+            {"_id": ObjectId(invoice_id)},
             {
                 "$push": {"line_items": utility_line_item},
                 "$set": {
@@ -1142,7 +1122,7 @@ class AsyncLeaseInvoiceManager:
             else:
                 # Auto-allocate: Find invoices with balance, prioritize old ones
                 cursor = self.db.property_invoices.find({
-                    "tenant_id": tenant_id,
+                    "tenant_id": ObjectId(tenant_id),
                     "balance_amount": {"$gt": 0},
                     "status": {"$nin": [InvoiceStatus.CANCELLED.value]}
                 }).sort("date_issued", 1)  # Oldest first
@@ -1248,7 +1228,7 @@ class AsyncLeaseInvoiceManager:
                 new_status = InvoiceStatus.PAID.value if new_balance <= 0 else InvoiceStatus.PARTIALLY_PAID.value
                 
                 await self.db.property_invoices.update_one(
-                    {"_id": source_invoice_id},
+                    {"_id": ObjectId(source_invoice_id)},
                     {
                         "$set": {
                             "total_paid": new_paid,
@@ -1288,7 +1268,7 @@ class AsyncLeaseInvoiceManager:
                 new_status = InvoiceStatus.PAID.value if new_balance <= 0 else InvoiceStatus.PARTIALLY_PAID.value
                 
                 await self.db.property_invoices.update_one(
-                    {"_id": invoice_id},
+                    {"_id": ObjectId(invoice_id)},
                     {
                         "$set": {
                             "total_paid": new_paid,
@@ -1316,7 +1296,7 @@ class AsyncLeaseInvoiceManager:
     async def _finalize_invoice(self, invoice_id: str):
         """Mark invoice as ready."""
         await self.db.property_invoices.update_one(
-            {"_id": invoice_id},
+            {"_id": ObjectId(invoice_id)},
             {
                 "$set": {
                     "status": InvoiceStatus.READY.value
@@ -1473,15 +1453,23 @@ class AsyncLeaseInvoiceManager:
         prev_billing_month = f"{prev_year}-{prev_month:02d}"
         
         prev_invoice = await self.db.property_invoices.find_one({
-            "meta.lease_id": lease_id,
+            "$or": [
+                {"lease_id": str(lease_id)},
+                {"meta.lease_id": str(lease_id)},
+            ],
             "meta.billing_period": prev_billing_month
         })
         
         if prev_invoice:
-            usage_key = f"{utility_name.lower().replace(' ', '_')}_usage"
-            usage_data = prev_invoice.get("meta", {}).get("utilities_usage", {}).get(usage_key)
-            if usage_data:
-                return usage_data.get("current_reading", 0.0)
+            utilities = [l for l in prev_invoice.get("line_items", []) if utility_name.lower() in l.get("utility_name","").lower() ]
+            if len(utilities)>0:
+                li_meta=utilities[0].get("meta",{})
+                return li_meta.get("current_reading", 0.0)
+                
+            # usage_key = f"{utility_name.lower().replace(' ', '_')}_usage"
+            # usage_data = prev_invoice.get("meta", {}).get("utilities_usage", {}).get(usage_key)
+            # if usage_data:
+            #     return usage_data.get("current_reading", 0.0)
         
         return 0.0
     
@@ -1661,7 +1649,7 @@ class AsyncLeaseInvoiceManager:
     
     async def _queue_expiration_notification(self, lease: Dict, notification_type: str):
         """Queue notification for lease expiration."""
-        tenant = await self.db.property_tenants.find_one({"_id": lease["tenant_id"]})
+        tenant = await self.db.property_tenants.find_one({"_id": ObjectId(lease["tenant_id"])})
         if not tenant:
             return
         
@@ -1713,7 +1701,7 @@ class AsyncLeaseInvoiceManager:
         invoice_dict = {
             "_id": ObjectId(invoice.id),
             "property_id": invoice.property_id,
-            "tenant_id": invoice.tenant_id,
+            "tenant_id": ObjectId(invoice.tenant_id),
             "date_issued": invoice.date_issued,
             "due_date": invoice.due_date,
             "units_id": invoice.units_id,
@@ -1732,6 +1720,7 @@ class AsyncLeaseInvoiceManager:
     async def _save_ticket(self, ticket: Ticket):
         """Save ticket to database."""
         ticket_dict = ticket.model_dump(by_alias=True)
+        ticket_dict["_id"]=ObjectId(ticket_dict["_id"])
         ticket_dict["tasks"] = [task.model_dump() for task in ticket.tasks]
         
         for task in ticket_dict["tasks"]:
@@ -1747,7 +1736,7 @@ class AsyncLeaseInvoiceManager:
     async def _save_notification(self, notification: Notification):
         """Save notification to database."""
         notification_dict = {
-            "_id": notification.id,
+            "_id": ObjectId(notification.id),
             "recipient_type": notification.recipient_type,
             "recipient_id": notification.recipient_id,
             "notification_type": notification.notification_type.value,
@@ -1765,6 +1754,7 @@ class AsyncLeaseInvoiceManager:
     async def _save_payment(self, payment: Payment):
         """Save payment to database."""
         payment_dict = payment.model_dump(by_alias=True)
+        payment_dict["_id"]=ObjectId(payment_dict["_id"])
         await self.db.property_payments.insert_one(payment_dict)
     async def get_tenant_balance(self,id):
         return 0
@@ -1774,7 +1764,7 @@ class AsyncLeaseInvoiceManager:
         include_consolidated: bool = True
     ) -> List[Dict]:
         """Get complete invoice history for a tenant with consolidation info."""
-        query = {"tenant_id": tenant_id}
+        query = {"tenant_id": ObjectId(tenant_id)}
         
         if not include_consolidated:
             query["status"] = {"$ne": InvoiceStatus.CONSOLIDATED.value}
@@ -1846,6 +1836,56 @@ async def complete_workflow_with_edge_cases():
         expiration_threshold_months=2
     )
     
+    db=client["fq_db"]
+    # async with await client.start_session() as session:
+    #     async with session.start_transaction():
+    #         # perform your DB operations here
+    #         result = await db.test.insert_one({"name": "Elijah"}, session=session)
+    #         inserted_id = result.inserted_id
+
+    #         # Example update (make sure `id` is a valid ObjectId)
+    #         await db.test.update_one(
+    #             {"_id": inserted_id}, 
+    #             {"$set": {"status": "done"}}, 
+    #             session=session
+    #         )
+
+    #         print("Transaction successful")
+    # return 
+    from bson import ObjectId
+    import json
+    # res=await manager._get_previous_utility_reading(ObjectId("690429e84c74bcbb048b4c65"),"Water","2025-09")
+    # print(res)
+    
+    # results = {
+    #         "billing_period": "2025-11",
+    #         "leases_processed": 0,
+    #         "leases_expiring": [],
+    #         "leases_expired": [],
+    #         "invoices_created": [],
+    #         "invoices_regenerated": [],
+    #         "invoices_consolidated": [],
+    #         "tickets_created": [],
+    #         "notifications_queued": [],
+    #         "errors": []
+    # }
+    
+    # lease=await db.property_leases.find_one({"_id": ObjectId("69042a294c74bcbb048b4d00")})
+    # if not lease:
+    #     print("lease not found")
+    #     return
+    # property_data=await db.properties.find_one({"_id": str(lease['property_id'])})
+    # x=await manager._process_single_lease(
+    #     lease=lease, 
+    #     billing_month="2025-11",
+    #     property_data=property_data,
+    #     force=True,
+    #     balance_method="itemized",
+    #     results=results
+    # )
+    # results["tasks"]=x
+    # print(json.dumps(results,indent=4))
+    # return
     print("=" * 80)
     print(" COMPREHENSIVE INVOICE WORKFLOW WITH EDGE CASES")
     print("=" * 80)
@@ -1858,7 +1898,7 @@ async def complete_workflow_with_edge_cases():
     billing_month = "2025-11"
     results = await manager.process_all_leases(
         billing_month=billing_month, 
-        force=False,
+        force=True,
         balance_method="itemized"
     )
     
@@ -1875,7 +1915,7 @@ async def complete_workflow_with_edge_cases():
     # View sample invoice
     if results['invoices_created']:
         invoice_id = results['invoices_created'][0]
-        invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
+        invoice = await manager.db.property_invoices.find_one({"_id": ObjectId(invoice_id)})
         
         print("\n" + "-" * 80)
         print("Sample Invoice Details:")
@@ -1913,192 +1953,192 @@ async def complete_workflow_with_edge_cases():
                 print(f"  Priority {rule['priority']}: {rule['billing_period']} - KES {rule['amount']:.2f}")
     
     # SCENARIO 2: Process utility readings
-    if results['tickets_created']:
-        print("\n" + "=" * 80)
-        print(" SCENARIO 2: Process Utility Readings")
-        print("=" * 80)
+    # if results['tickets_created']:
+    #     print("\n" + "=" * 80)
+    #     print(" SCENARIO 2: Process Utility Readings")
+    #     print("=" * 80)
         
-        ticket_id = results['tickets_created'][0]
-        ticket = await manager.db.property_tickets.find_one({"_id": ticket_id})
+    #     ticket_id = results['tickets_created'][0]
+    #     ticket = await manager.db.property_tickets.find_one({"_id": ticket_id})
         
-        print(f"\nTicket: {ticket['title']}")
-        print(f"Total Tasks: {len(ticket['tasks'])}")
+    #     print(f"\nTicket: {ticket['title']}")
+    #     print(f"Total Tasks: {len(ticket['tasks'])}")
         
-        for i, task in enumerate(ticket['tasks'][:2], 1):  # Process first 2 tasks
-            if task['status'] == TaskStatus.AWAITING_INPUT.value:
-                task_id = task['id']
-                current_reading = task['metadata']['previous_reading'] + 25.5
+    #     for i, task in enumerate(ticket['tasks'][:2], 1):  # Process first 2 tasks
+    #         if task['status'] == TaskStatus.AWAITING_INPUT.value:
+    #             task_id = task['id']
+    #             current_reading = task['metadata']['previous_reading'] + 25.5
                 
-                print(f"\n🔧 Processing Task {i}: {task['title']}")
-                print(f"   Previous: {task['metadata']['previous_reading']}")
-                print(f"   Current: {current_reading}")
+    #             print(f"\n🔧 Processing Task {i}: {task['title']}")
+    #             print(f"   Previous: {task['metadata']['previous_reading']}")
+    #             print(f"   Current: {current_reading}")
                 
-                result = await manager.process_utility_reading(
-                    task_id=task_id,
-                    current_reading=current_reading,
-                    reading_date="2025-11-28"
-                )
+    #             result = await manager.process_utility_reading(
+    #                 task_id=task_id,
+    #                 current_reading=current_reading,
+    #                 reading_date="2025-11-28"
+    #             )
                 
-                if result['success']:
-                    print(f"   ✓ Usage: {result['usage_record']['usage']} {result['usage_record']['unit_of_measure']}")
-                    print(f"   ✓ Amount: KES {result['usage_record']['amount']:.2f}")
-                    print(f"   ✓ Progress: {result['progress']['percentage']}%")
+    #             if result['success']:
+    #                 print(f"   ✓ Usage: {result['usage_record']['usage']} {result['usage_record']['unit_of_measure']}")
+    #                 print(f"   ✓ Amount: KES {result['usage_record']['amount']:.2f}")
+    #                 print(f"   ✓ Progress: {result['progress']['percentage']}%")
     
     # SCENARIO 3: Make partial payment
-    print("\n" + "=" * 80)
-    print(" SCENARIO 3: Process Partial Payment")
-    print("=" * 80)
+    # print("\n" + "=" * 80)
+    # print(" SCENARIO 3: Process Partial Payment")
+    # print("=" * 80)
     
-    if results['invoices_created']:
-        invoice_id = results['invoices_created'][0]
-        invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
-        tenant_id = invoice['tenant_id']
+    # if results['invoices_created']:
+    #     invoice_id = results['invoices_created'][0]
+    #     invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
+    #     tenant_id = invoice['tenant_id']
         
-        # Pay only 60% of total
-        partial_amount = invoice['total_amount'] * 0.6
+    #     # Pay only 60% of total
+    #     partial_amount = invoice['total_amount'] * 0.6
         
-        print(f"\n💰 Making partial payment of KES {partial_amount:.2f}")
-        print(f"   (60% of total KES {invoice['total_amount']:.2f})")
+    #     print(f"\n💰 Making partial payment of KES {partial_amount:.2f}")
+    #     print(f"   (60% of total KES {invoice['total_amount']:.2f})")
         
-        payment_result = await manager.process_payment(
-            tenant_id=tenant_id,
-            amount=partial_amount,
-            payment_method="mpesa",
-            reference="MPAY123456",
-            target_invoice_id=invoice_id
-        )
+    #     payment_result = await manager.process_payment(
+    #         tenant_id=tenant_id,
+    #         amount=partial_amount,
+    #         payment_method="mpesa",
+    #         reference="MPAY123456",
+    #         target_invoice_id=invoice_id
+    #     )
         
-        if payment_result['success']:
-            print(f"\n✓ Payment processed successfully")
-            print(f"  Payment ID: {payment_result['payment_id']}")
-            print(f"\n📊 Payment Allocation:")
+    #     if payment_result['success']:
+    #         print(f"\n✓ Payment processed successfully")
+    #         print(f"  Payment ID: {payment_result['payment_id']}")
+    #         print(f"\n📊 Payment Allocation:")
             
-            for allocation in payment_result['allocations']:
-                print(f"  → {allocation['billing_period']}: KES {allocation['amount']:.2f} ({allocation['invoice_status']})")
+    #         for allocation in payment_result['allocations']:
+    #             print(f"  → {allocation['billing_period']}: KES {allocation['amount']:.2f} ({allocation['invoice_status']})")
             
-            if payment_result['remaining_amount'] > 0:
-                print(f"\n💳 Remaining credited to tenant: KES {payment_result['remaining_amount']:.2f}")
+    #         if payment_result['remaining_amount'] > 0:
+    #             print(f"\n💳 Remaining credited to tenant: KES {payment_result['remaining_amount']:.2f}")
     
     # SCENARIO 4: Make full payment (using credit + cash)
-    print("\n" + "=" * 80)
-    print(" SCENARIO 4: Full Payment with Credit Applied")
-    print("=" * 80)
+    # print("\n" + "=" * 80)
+    # print(" SCENARIO 4: Full Payment with Credit Applied")
+    # print("=" * 80)
     
-    if results['invoices_created']:
-        invoice_id = results['invoices_created'][0]
-        invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
-        tenant_id = invoice['tenant_id']
+    # if results['invoices_created']:
+    #     invoice_id = results['invoices_created'][0]
+    #     invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
+    #     tenant_id = invoice['tenant_id']
         
-        # Get current balance
-        remaining_balance = invoice['balance_amount']
+    #     # Get current balance
+    #     remaining_balance = invoice['balance_amount']
         
-        # Get tenant credit
-        tenant = await manager.db.property_tenants.find_one({"_id": ObjectId(tenant_id)})
-        if not tenant:
-            raise Exception(f"Unable to get tenant {tenant_id}")
-        credit_balance = tenant.get('credit_balance', 0)
+    #     # Get tenant credit
+    #     tenant = await manager.db.property_tenants.find_one({"_id": ObjectId(tenant_id)})
+    #     if not tenant:
+    #         raise Exception(f"Unable to get tenant {tenant_id}")
+    #     credit_balance = tenant.get('credit_balance', 0)
         
-        # Calculate payment needed (balance - credit)
-        payment_needed = max(0, remaining_balance - credit_balance)
+    #     # Calculate payment needed (balance - credit)
+    #     payment_needed = max(0, remaining_balance - credit_balance)
         
-        print(f"\n📋 Invoice Balance: KES {remaining_balance:.2f}")
-        print(f"💳 Tenant Credit: KES {credit_balance:.2f}")
-        print(f"💵 Payment Needed: KES {payment_needed:.2f}")
+    #     print(f"\n📋 Invoice Balance: KES {remaining_balance:.2f}")
+    #     print(f"💳 Tenant Credit: KES {credit_balance:.2f}")
+    #     print(f"💵 Payment Needed: KES {payment_needed:.2f}")
         
-        if payment_needed > 0:
-            payment_result = await manager.process_payment(
-                tenant_id=tenant_id,
-                amount=payment_needed,
-                payment_method="bank",
-                reference="BANK789012",
-                target_invoice_id=invoice_id
-            )
+    #     if payment_needed > 0:
+    #         payment_result = await manager.process_payment(
+    #             tenant_id=tenant_id,
+    #             amount=payment_needed,
+    #             payment_method="bank",
+    #             reference="BANK789012",
+    #             target_invoice_id=invoice_id
+    #         )
             
-            if payment_result['success']:
-                print(f"\n✓ Full payment processed")
-                print(f"  Payment ID: {payment_result['payment_id']}")
+    #         if payment_result['success']:
+    #             print(f"\n✓ Full payment processed")
+    #             print(f"  Payment ID: {payment_result['payment_id']}")
                 
-                for allocation in payment_result['allocations']:
-                    print(f"  → {allocation['billing_period']}: KES {allocation['amount']:.2f} ({allocation['invoice_status']})")
+    #             for allocation in payment_result['allocations']:
+    #                 print(f"  → {allocation['billing_period']}: KES {allocation['amount']:.2f} ({allocation['invoice_status']})")
     
     # SCENARIO 5: Generate next month with multiple consolidations
-    print("\n" + "=" * 80)
-    print(" SCENARIO 5: Next Month - Multiple Consolidations")
-    print("=" * 80)
+    # print("\n" + "=" * 80)
+    # print(" SCENARIO 5: Next Month - Multiple Consolidations")
+    # print("=" * 80)
     
-    next_month = "2025-12"
-    results2 = await manager.process_all_leases(
-        billing_month=next_month,
-        force=False,
-        balance_method="sum"  # Use sum method this time
-    )
+    # next_month = "2025-12"
+    # results2 = await manager.process_all_leases(
+    #     billing_month=next_month,
+    #     force=False,
+    #     balance_method="sum"  # Use sum method this time
+    # )
     
-    print(f"\n✓ Processed {results2['leases_processed']} leases for {next_month}")
-    print(f"✓ Created {len(results2['invoices_created'])} invoices")
-    print(f"✓ Consolidated {len(results2['invoices_consolidated'])} old invoices")
+    # print(f"\n✓ Processed {results2['leases_processed']} leases for {next_month}")
+    # print(f"✓ Created {len(results2['invoices_created'])} invoices")
+    # print(f"✓ Consolidated {len(results2['invoices_consolidated'])} old invoices")
     
-    # View invoice with multiple consolidations
-    if results2['invoices_created']:
-        invoice_id = results2['invoices_created'][0]
-        invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
+    # # View invoice with multiple consolidations
+    # if results2['invoices_created']:
+    #     invoice_id = results2['invoices_created'][0]
+    #     invoice = await manager.db.property_invoices.find_one({"_id": invoice_id})
         
-        print(f"\n📄 Invoice for {next_month}:")
-        print(f"   Tenant: {invoice['meta']['tenant']['full_name']}")
+    #     print(f"\n📄 Invoice for {next_month}:")
+    #     print(f"   Tenant: {invoice['meta']['tenant']['full_name']}")
         
-        # Count consolidated invoices
-        allocation_rules = invoice.get('meta', {}).get('payment_allocation_rules', [])
-        if allocation_rules:
-            print(f"   📚 Consolidating {len(allocation_rules)} previous invoices:")
-            for rule in allocation_rules:
-                print(f"      - {rule['billing_period']}: KES {rule['amount']:.2f}")
+    #     # Count consolidated invoices
+    #     allocation_rules = invoice.get('meta', {}).get('payment_allocation_rules', [])
+    #     if allocation_rules:
+    #         print(f"   📚 Consolidating {len(allocation_rules)} previous invoices:")
+    #         for rule in allocation_rules:
+    #             print(f"      - {rule['billing_period']}: KES {rule['amount']:.2f}")
     
     # SCENARIO 6: View tenant invoice history
-    print("\n" + "=" * 80)
-    print(" SCENARIO 6: Tenant Invoice History")
-    print("=" * 80)
+    # print("\n" + "=" * 80)
+    # print(" SCENARIO 6: Tenant Invoice History")
+    # print("=" * 80)
     
-    if results['invoices_created']:
-        invoice = await manager.db.property_invoices.find_one({"_id": results['invoices_created'][0]})
-        tenant_id = invoice['tenant_id']
+    # if results['invoices_created']:
+    #     invoice = await manager.db.property_invoices.find_one({"_id": results['invoices_created'][0]})
+    #     tenant_id = invoice['tenant_id']
         
-        history = await manager.get_tenant_invoice_history(tenant_id, include_consolidated=True)
+    #     history = await manager.get_tenant_invoice_history(tenant_id, include_consolidated=True)
         
-        print(f"\n📊 Invoice History for Tenant {invoice['meta']['tenant']['full_name']}:")
-        print(f"   Total Invoices: {len(history)}\n")
+    #     print(f"\n📊 Invoice History for Tenant {invoice['meta']['tenant']['full_name']}:")
+    #     print(f"   Total Invoices: {len(history)}\n")
         
-        for inv in history[:5]:  # Show last 5
-            billing_period = inv.get('meta', {}).get('billing_period', 'N/A')
-            status = inv['status']
-            total = inv['total_amount']
-            balance = inv['balance_amount']
+    #     for inv in history[:5]:  # Show last 5
+    #         billing_period = inv.get('meta', {}).get('billing_period', 'N/A')
+    #         status = inv['status']
+    #         total = inv['total_amount']
+    #         balance = inv['balance_amount']
             
-            status_emoji = {
-                'paid': '✅',
-                'consolidated': '📦',
-                'ready': '📄',
-                'partially_paid': '⏳',
-                'overdue': '⚠️'
-            }.get(status, '❓')
+    #         status_emoji = {
+    #             'paid': '✅',
+    #             'consolidated': '📦',
+    #             'ready': '📄',
+    #             'partially_paid': '⏳',
+    #             'overdue': '⚠️'
+    #         }.get(status, '❓')
             
-            print(f"   {status_emoji} {billing_period} - {status.upper()}")
-            print(f"      Total: KES {total:.2f} | Balance: KES {balance:.2f}")
+    #         print(f"   {status_emoji} {billing_period} - {status.upper()}")
+    #         print(f"      Total: KES {total:.2f} | Balance: KES {balance:.2f}")
             
-            if status == 'consolidated':
-                consolidated_into = inv.get('consolidated_into_info', {})
-                if consolidated_into:
-                    print(f"      → Consolidated into {consolidated_into.get('billing_period', 'N/A')}")
+    #         if status == 'consolidated':
+    #             consolidated_into = inv.get('consolidated_into_info', {})
+    #             if consolidated_into:
+    #                 print(f"      → Consolidated into {consolidated_into.get('billing_period', 'N/A')}")
             
-            print()
+    #         print()
     
-    print("=" * 80)
-    print(" WORKFLOW COMPLETE - ALL EDGE CASES HANDLED")
-    print("=" * 80)
-    print("\n✓ Previous balances consolidated")
-    print("✓ Overpayment credits applied")
-    print("✓ Partial payments processed")
-    print("✓ Multiple consolidations tracked")
-    print("✓ Payment allocation working correctly")
-    print("✓ Complete audit trail maintained")
+    # print("=" * 80)
+    # print(" WORKFLOW COMPLETE - ALL EDGE CASES HANDLED")
+    # print("=" * 80)
+    # print("\n✓ Previous balances consolidated")
+    # print("✓ Overpayment credits applied")
+    # print("✓ Partial payments processed")
+    # print("✓ Multiple consolidations tracked")
+    # print("✓ Payment allocation working correctly")
+    # print("✓ Complete audit trail maintained")
     
     client.close()
 

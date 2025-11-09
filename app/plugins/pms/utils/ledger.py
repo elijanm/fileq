@@ -27,7 +27,8 @@ from typing import List, Optional
 from bson import ObjectId
 from pydantic_core import core_schema
 from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler
-
+from plugins.pms.models.ledger_entry import Invoice,InvoiceLineItem as LineItem,LedgerEntry,PyObjectId
+from plugins.pms.accounting.reports import ReportGenerator
 
 # --- Helper for ObjectId compatibility ---
 def generate_collection_insight(total_invoiced, total_collected, avg_due_days, overdue_invoices, move_outs):
@@ -69,12 +70,12 @@ def compute_financial_metrics(
     # --- Cash collected ---
     total_collected = sum(e.debit for e in ledger_entries if e.account == "Cash")
 
-    # --- Overdue invoices ---
-    overdue_invoices = [inv for inv in invoices if inv.due_date < today and inv.status in ["issued","unpaid"]]
-    avg_due_days = (
-        sum((today - inv.due_date).days for inv in overdue_invoices) / len(overdue_invoices)
-        if overdue_invoices else 0
-    )
+    # # --- Overdue invoices ---
+    # overdue_invoices = [inv for inv in invoices if inv.due_date < today and inv.status in ["issued","unpaid"]]
+    # avg_due_days = (
+    #     sum((today - inv.due_date).days for inv in overdue_invoices) / len(overdue_invoices)
+    #     if overdue_invoices else 0
+    # )
 
     # --- Movement / tenancy metrics ---
     move_outs = list(moving_out_next_month)
@@ -83,6 +84,10 @@ def compute_financial_metrics(
     collection_rate = (total_collected / total_invoiced * 100) if total_invoiced > 0 else 0
     vacancy_rate = (vacant_units / total_units * 100) if total_units > 0 else 0
     arrears_balance = total_invoiced - total_collected
+    # arrears_balance = sum(i.balance_amount for i in invoices if i.balance_amount > 0)
+    
+    # assert abs(arrears_balance_ - arrears_balance) < 0.05, f"Discrepancy between invoiced - paid and balances!-by {arrears_balance_ - arrears_balance}"
+
     average_rent_per_unit = (total_invoiced / occupied_units) if occupied_units > 0 else 0
     
     invoices_by_status = {
@@ -98,8 +103,24 @@ def compute_financial_metrics(
     total_pending = total_invoiced - total_collected if total_invoiced else 0
 
     # Overdue invoices
-    overdue_invoices = [i for i in invoices if i.due_date < today and i.status != "paid"]
-    total_overdue = sum(i.total_amount for i in overdue_invoices)
+    overdue_invoices = [i for i in invoices if i.due_date < today and i.status in ["partial","unpaid"]]
+    total_overdue = round(sum(i.balance_amount for i in overdue_invoices), 2)
+    partially_paid = round(sum(i.total_paid for i in overdue_invoices if i.status == "partial"))
+    unique_statuses = {i.status for i in overdue_invoices}
+    credit_balance = round(sum(inv.overpaid_amount for inv in invoices if inv.overpaid_amount > 0))
+    net_receivables = arrears_balance - credit_balance
+    
+    u=[{"id":str(i.id),"balance_amount":i.balance_amount,"total_amount":i.total_amount,"total_paid":i.total_paid} for i in overdue_invoices if i.status == "partial"]
+    import json
+    print(json.dumps({
+        "partially_paid":partially_paid,
+        "overdue_invoices":total_overdue,
+        "diff":total_overdue-partially_paid,
+        "unique_statuses":unique_statuses,
+        "net_receivables":net_receivables,
+        "arrears_balance_":arrears_balance,
+        "data":u
+    },indent=4,default=str))
     avg_due_days = (
         sum((today - i.due_date).days for i in overdue_invoices) / len(overdue_invoices)
         if overdue_invoices else 0
@@ -176,183 +197,6 @@ def compute_forecast_metrics(invoices, ledger_entries):
         "forecast_balance": round(forecast_balance, 2),
     }
 
-class PyObjectId(ObjectId):
-    """Pydantic v2 compatible ObjectId wrapper that accepts both str and ObjectId."""
-
-    @classmethod
-    def validate(cls, v):
-        if isinstance(v, ObjectId):
-            return v
-        if isinstance(v, str):
-            try:
-                return ObjectId(v)
-            except Exception:
-                raise ValueError(f"Invalid ObjectId string: {v}")
-        raise TypeError(f"Expected str or ObjectId, got {type(v)}")
-
-    @classmethod
-    def __get_pydantic_core_schema__(cls, source_type, handler: GetCoreSchemaHandler):
-        # Validate string → ObjectId conversion
-        return core_schema.no_info_after_validator_function(cls.validate, core_schema.union_schema([
-            core_schema.str_schema(),
-            core_schema.is_instance_schema(ObjectId)
-        ]))
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler: GetJsonSchemaHandler):
-        json_schema = handler(core_schema)
-        json_schema.update(type="string", examples=["671fb57ef25e3e94c611b9b0"])
-        return json_schema
-    def __str__(self):
-        return str(ObjectId(self))
-
-
-
-# ============================================================
-# MODELS
-# ============================================================
-
-class LineItem(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    description: str
-    amount: float
-    category: str="utilities"  # rent, deposit, maintenance, utilities, taxes, investment, loan, other
-    usage_units: Optional[float] = None
-    meta: Optional[dict] = Field(default_factory=dict)
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={
-            ObjectId: str,
-            datetime: lambda v: v.isoformat(),
-            date: lambda v: v.isoformat(),
-        }
-    )
-    
-    @field_serializer("meta", when_used="json")
-    def serialize_meta(self, v,info):
-        """Recursively convert ObjectId/date inside meta to JSON-safe strings."""
-        return normalize_bson(v)
-
-    @staticmethod
-    def create(description: str, amount: float, category: str,meta:dict={}) -> "LineItem":
-        return LineItem(description=description, amount=amount, category=category,meta=meta)
-
-
-class Invoice(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    property_id: str
-    tenant_id: Union[str, ObjectId]
-    date_issued: datetime
-    payment_date: Optional[datetime]=None
-    due_date: datetime
-    units_id: List[str]=Field(None,)
-    line_items: List[LineItem]
-    total_amount: float
-    total_paid: Optional[float]=0.00
-    effective_paid: Optional[float]=0.00
-    overpaid_amount: Optional[float]=0.00
-    balance_amount: Optional[float]=0.00
-    meta: Optional[dict]={}
-    status: str = "issued"
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={
-            ObjectId: str,
-            datetime: lambda v: v.isoformat(),
-            date: lambda v: v.isoformat(),
-        }
-    )
-    @field_validator("tenant_id", mode="before")
-    @classmethod
-    def normalize_tenant_id(cls, v):
-        """Accept ObjectId or string, store as string."""
-        if isinstance(v, ObjectId):
-            return str(v)
-        elif isinstance(v, str) and ObjectId.is_valid(v):
-            return v
-        raise ValueError("Invalid tenant_id: must be ObjectId or valid string")
-    
-    @field_serializer("meta", when_used="json")
-    def serialize_meta(self, v,info):
-        """Recursively convert ObjectId/date inside meta to JSON-safe strings."""
-        return normalize_bson(v)
-
-    @staticmethod
-    def create(
-        property_id: str,
-        tenant_id: str,
-        date_issued: date,
-        due_date: date,
-        items: List[LineItem],
-        units_id: Optional[List[str]] = None,
-    ) -> "Invoice":
-        return Invoice(
-            property_id=property_id,
-            tenant_id=tenant_id,
-            date_issued=date_issued,
-            due_date=due_date,
-            line_items=items,
-            total_amount=sum(i.amount for i in items),
-            units_id=units_id,
-            status="issued",
-        )
-
-
-class LedgerEntry(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    date: datetime
-    account: str
-    debit: float = 0.0
-    credit: float = 0.0
-    description: Optional[str] = None
-    invoice_id: Optional[PyObjectId] = None
-    line_item_id: Optional[PyObjectId] = None
-    property_id: Optional[str] = None
-    tenant_id: Optional[str] = None
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-
-    @staticmethod
-    def create(**kwargs) -> "LedgerEntry":
-        kwargs.setdefault("id", PyObjectId())
-        return LedgerEntry(**kwargs)
-
-
-# =============================
-# Chart of Accounts Metadata
-# =============================
-
-ACCOUNT_META = {
-    "Cash": ("asset", "current_asset", "debit"),
-    "Accounts Receivable": ("asset", "current_asset", "debit"),
-    "Property": ("asset", "noncurrent_asset", "debit"),
-    "Equipment": ("asset", "noncurrent_asset", "debit"),
-    "Accumulated Depreciation": ("contra_asset", "noncurrent_asset", "credit"),
-    "Accounts Payable": ("liability", "current_liability", "credit"),
-    "Security Deposit Liability": ("liability", "current_liability", "credit"),
-    "Loan Payable": ("liability", "noncurrent_liability", "credit"),
-    "Owner Capital": ("equity", "equity", "credit"),
-    "Retained Earnings": ("equity", "equity", "credit"),
-    "Rental Income": ("income", "operating_revenue", "credit"),
-    "Utilities Income": ("income", "operating_revenue", "credit"),
-    "Maintenance Income": ("income", "other_revenue", "credit"),
-    "Tax Income": ("income", "other_revenue", "credit"),
-    "Misc Income": ("income", "other_revenue", "credit"),
-    "Maintenance Expense": ("expense", "operating_expense", "debit"),
-    "Utilities Expense": ("expense", "operating_expense", "debit"),
-    "Property Taxes": ("expense", "operating_expense", "debit"),
-    "Management Fees": ("expense", "operating_expense", "debit"),
-    "Depreciation Expense": ("expense", "noncash_expense", "debit"),
-    "Loan Interest Expense": ("expense", "financing_expense", "debit"),
-}
-
 # =============================
 # Helpers
 # =============================
@@ -365,411 +209,6 @@ def account_balance(entries: List[LedgerEntry], up_to: Optional[date] = None) ->
         bal[e.account] += e.debit - e.credit
     return bal
 
-# =============================
-# Ledger Posting Utilities
-# =============================
-
-class Ledger:
-    def __init__(self,db:AsyncIOMotorDatabase):
-        self.db=db
-    async def sync_invoice_payment_status(self, invoice_id: ObjectId) -> None:
-        """
-        Recalculate totals for a given invoice from ledger_entries.
-        Updates invoice fields: total_paid, effective_paid, overpaid_amount, status.
-        """
-        # Sum all cash debits tied to this invoice
-#         If you support multiple partial payments and credit applications across time,
-# extend the aggregation with both Cash and Tenant Credit / Prepaid Rent:
-#         {"$match": {
-#             "invoice_id": invoice_id,
-#             "account": {"$in": ["Cash", "Tenant Credit / Prepaid Rent"]}
-#         }}
-        
-        pipeline = [
-            {"$match": {"invoice_id": invoice_id, "account": "Cash"}},
-            {"$group": {"_id": None, "total_cash": {"$sum": "$debit"}}},
-        ]
-        cash_docs = await self.db.ledger_entries.aggregate(pipeline).to_list(length=1)
-        total_paid = cash_docs[0]["total_cash"] if cash_docs else 0.0
-
-        # Fetch invoice total
-        invoice = await self.db.property_invoices.find_one({"_id": invoice_id})
-        if not invoice:
-            raise ValueError(f"Invoice {invoice_id} not found in DB")
-
-        invoice_total = invoice.get("total_amount", 0.0)
-        orig_status=invoice["status"]
-        # Compute effective & overpaid
-        effective_paid = min(total_paid, invoice_total)
-        overpaid_amount = max(0.0, total_paid - invoice_total)
-        new_status = "paid" if total_paid >= invoice_total else "partial"
-        new_status=new_status if effective_paid>0 else orig_status
-        balance_amount=invoice_total-effective_paid
-
-        # Update invoice doc
-        await self.db.property_invoices.update_one(
-            {"_id": invoice_id},
-            {"$set": {
-                "total_paid": total_paid,
-                "effective_paid": effective_paid,
-                "overpaid_amount": overpaid_amount,
-                "balance_amount": balance_amount,
-                "status": new_status,
-            }}
-        )
-
-        print(
-            f"🔄 Invoice {invoice_id}: total_paid={total_paid:.2f}, "
-            f"effective={effective_paid:.2f}, overpaid={overpaid_amount:.2f}, "
-            f"status={new_status}"
-        )
-
-    async def post_invoice_to_ledger(self, invoice: Invoice) -> List[LedgerEntry]:
-        entries = []
-        mapping = {
-            "rent": "Rental Income",
-            "deposit": "Security Deposit Liability",
-            "maintenance": "Maintenance Income",
-            "utilities": "Utilities Income",
-            "taxes": "Tax Income",
-            "investment": "Property",
-            "loan": "Loan Payable",
-        }
-        # 1️⃣ Check if invoice exists
-        existing = await self.db.property_invoices.find_one({"_id": invoice.id})
-        if not existing:
-            await self.db.property_invoices.insert_one(invoice.model_dump(by_alias=True))
-            
-        for item in invoice.line_items:
-            account = mapping.get(item.category, "Misc Income")
-            entries.append(LedgerEntry.create(
-                date=invoice.date_issued, account=account, credit=item.amount,
-                description=f"{item.category.capitalize()} for invoice {invoice.id}",
-                invoice_id=invoice.id, line_item_id=item.id,
-                property_id=invoice.property_id, tenant_id=invoice.tenant_id
-            ))
-        entries.append(LedgerEntry.create(
-            date=invoice.date_issued, account="Accounts Receivable", debit=invoice.total_amount,
-            description=f"Invoice {invoice.id} receivable",
-            invoice_id=invoice.id, property_id=invoice.property_id, tenant_id=invoice.tenant_id
-        ))
-        
-        if entries:
-            await self.db.property_ledger_entries.insert_many(
-                [e.model_dump(by_alias=True) for e in entries]
-            )
-            await self.sync_invoice_payment_status(invoice.id)
-            print(f"📘 Posted {len(entries)} ledger entries for invoice {invoice.id}")
-        return entries
-
-    async def post_payment_to_ledger(self, invoice: Invoice, amount: float, payment_date: datetime) -> List[LedgerEntry]:
-        existing = await self.db.property_invoices.find_one({"_id": invoice.id})
-        if not existing:
-            raise Exception("Invoice must be existing in DB")
-        entries= [
-            LedgerEntry.create(date=payment_date, account="Cash", debit=amount,
-                               description=f"Payment received for invoice {invoice.id}",
-                               invoice_id=invoice.id, property_id=invoice.property_id, tenant_id=invoice.tenant_id),
-            LedgerEntry.create(date=payment_date, account="Accounts Receivable", credit=amount,
-                               description=f"Payment applied to invoice {invoice.id}",
-                               invoice_id=invoice.id, property_id=invoice.property_id, tenant_id=invoice.tenant_id),
-        ]
-        if entries:
-            await self.db.property_ledger_entries.insert_many(
-                [e.model_dump(by_alias=True) for e in entries]
-            )
-            
-            total_paid = (
-                await self.db.property_ledger_entries.aggregate([
-                    {"$match": {"invoice_id": invoice.id, "account": "Cash"}},
-                    {"$group": {"_id": None, "total": {"$sum": "$debit"}}}
-                ])
-                .to_list(length=1)
-            )
-
-            total_paid_amount = total_paid[0]["total"] if total_paid else 0.0
-            
-            overpaid_amount = max(0.0, total_paid_amount - invoice.total_amount)
-            effective_paid = min(total_paid_amount, invoice.total_amount)
-            
-            # 6️⃣ Post overpayment as tenant credit if any
-            if overpaid_amount > 0:
-                credit_entry = LedgerEntry(
-                    date=payment_date,
-                    account="Tenant Credit / Prepaid Rent",
-                    credit=overpaid_amount,
-                    description=f"Overpayment credit for tenant {invoice.tenant_id}",
-                    property_id=invoice.property_id,
-                    tenant_id=invoice.tenant_id,
-                )
-                await self.db.property_ledger_entries.insert_one(credit_entry.model_dump(by_alias=True))
-                entries.append(credit_entry)
-                print(f"💳 Overpayment of {overpaid_amount:.2f} recorded to Tenant Credit.")
-
-            # 7️⃣ Determine status
-            new_status = "paid" if total_paid_amount >= invoice.total_amount else "partial"
-
-            await self.db.property_invoices.update_one(
-                {"_id": ObjectId(invoice.id)},
-                {"$set": {
-                    "status": new_status,
-                    "total_paid": total_paid_amount,
-                    "effective_paid": effective_paid,
-                    "overpaid_amount": overpaid_amount,
-                    "balance_amount":invoice.total_amount-effective_paid
-                }}
-            )
-            
-            await self.db.property_invoices.update_one(
-                {
-                    "_id": ObjectId(invoice.id),
-                    "$or": [
-                        {"payment_date": {"$exists": False}},
-                        {"payment_date": None}
-                    ]
-                },
-                {"$set": {"payment_date": payment_date}}
-            )
-            print(
-                f"💰 Payment of {amount:.2f} recorded for invoice {invoice.id}. "
-                f"Total paid={total_paid_amount:.2f}, overpaid={overpaid_amount:.2f}, status={new_status.upper()}"
-            )
-            print(f"📘 Posted {len(entries)} ledger entries for invoice {invoice.id}")
-        return entries
-    
-    async def apply_tenant_credit(
-        self,
-        tenant_id: str,
-        amount: float,
-        date_applied: date,
-        apply_to_account: str = "Accounts Receivable",
-        description: str = "Auto-applied tenant credit to new invoice"
-    ) -> Tuple[List[LedgerEntry], float]:
-        """
-        Automatically applies available tenant credit against an invoice or rent charge.
-        Returns (ledger_entries_created, remaining_amount_to_invoice).
-        """
-        entries: List[LedgerEntry] = []
-
-        # 1️⃣ Calculate total available credit
-        pipeline = [
-            {"$match": {"tenant_id": tenant_id, "account": "Tenant Credit / Prepaid Rent"}},
-            {"$group": {
-                "_id": None,
-                "total_credit": {"$sum": "$credit"},
-                "total_debit": {"$sum": "$debit"}
-            }}
-        ]
-        credit_docs = await self.db.ledger_entries.aggregate(pipeline).to_list(length=1)
-        available_credit = 0.0
-        if credit_docs:
-            c = credit_docs[0]
-            available_credit = c["total_credit"] - c["total_debit"]
-
-        if available_credit <= 0:
-            # No credit available → return unchanged
-            print(f"⚠️ Tenant {tenant_id} has no credit to apply.")
-            return [], amount
-
-        # 2️⃣ Determine how much credit to apply
-        credit_to_apply = min(amount, available_credit)
-        remaining_to_invoice = max(0.0, amount - credit_to_apply)
-
-        # 3️⃣ Post ledger entries
-        # Debit Tenant Credit (reduces liability)
-        entries.append(
-            LedgerEntry(
-                date=date_applied,
-                account="Tenant Credit / Prepaid Rent",
-                debit=credit_to_apply,
-                description=f"Applied credit for tenant {tenant_id}",
-                tenant_id=tenant_id,
-            )
-        )
-
-        # Credit AR or other income offset
-        entries.append(
-            LedgerEntry(
-                date=date_applied,
-                account=apply_to_account,
-                credit=credit_to_apply,
-                description=description,
-                tenant_id=tenant_id,
-            )
-        )
-
-        # 4️⃣ Insert entries
-        await self.db.ledger_entries.insert_many(
-            [e.model_dump(by_alias=True) for e in entries]
-        )
-        
-
-        # 5️⃣ Log result
-        if remaining_to_invoice == 0:
-            print(
-                f"💳 Tenant {tenant_id} credit of {credit_to_apply:.2f} fully covers invoice. "
-                f"Remaining credit reduced to {available_credit - credit_to_apply:.2f}."
-            )
-        else:
-            print(
-                f"💳 Tenant {tenant_id} credit of {credit_to_apply:.2f} applied. "
-                f"Remaining amount to invoice: {remaining_to_invoice:.2f}. "
-                f"Credit balance now: {available_credit - credit_to_apply:.2f}."
-            )
-
-        return entries, remaining_to_invoice
-    
-    
-    async def refund_deposit_with_deduction(self, tenant_id: str, property_id: str,
-                                      deposit_amount: float, deduction_ratio: float,
-                                      refund_date: date) -> List[LedgerEntry]:
-        deduction = round(deposit_amount * deduction_ratio, 2)
-        net_refund = round(deposit_amount - deduction, 2)
-        entries= [
-            LedgerEntry.create(date=refund_date, account="Security Deposit Liability", debit=deposit_amount,
-                               description=f"Deposit refund (full) for {tenant_id}",
-                               property_id=property_id, tenant_id=tenant_id),
-            LedgerEntry.create(date=refund_date, account="Cash", credit=net_refund,
-                               description=f"Net refund to {tenant_id} after {int(deduction_ratio*100)}% deduction",
-                               property_id=property_id, tenant_id=tenant_id),
-            LedgerEntry.create(date=refund_date, account="Maintenance Income", credit=deduction,
-                               description=f"Deposit deduction recognized as income ({int(deduction_ratio*100)}%)",
-                               property_id=property_id, tenant_id=tenant_id),
-        ]
-        if entries:
-            await self.db.property_ledger_entries.insert_many(
-                [e.model_dump(by_alias=True) for e in entries]
-            )
-            print(f"📘 Posted {len(entries)} ledger entries for refund_deposit_with_deduction {property_id}")
-        return entries
-
-    async def post_capex(self, when: date, property_id: str, amount: float) -> List[LedgerEntry]:
-        entries= [
-            LedgerEntry.create(date=when, account="Equipment", debit=amount,
-                               description="Capital expenditure", property_id=property_id),
-            LedgerEntry.create(date=when, account="Cash", credit=amount,
-                               description="Capex paid", property_id=property_id),
-        ]
-        if entries:
-            await self.db.property_ledger_entries.insert_many(
-                [e.model_dump(by_alias=True) for e in entries]
-            )
-            print(f"📘 Posted {len(entries)} ledger entries for post_capex {property_id}")
-        return entries
-
-    async def post_monthly_depreciation(self, when: date, property_id: str, amount: float) -> List[LedgerEntry]:
-        entries= [
-            LedgerEntry.create(date=when, account="Depreciation Expense", debit=amount,
-                               description="Monthly depreciation", property_id=property_id),
-            LedgerEntry.create(date=when, account="Accumulated Depreciation", credit=amount,
-                               description="Accumulated depreciation", property_id=property_id),
-        ]
-        if entries:
-            await self.db.property_ledger_entries.insert_many(
-                [e.model_dump(by_alias=True) for e in entries]
-            )
-            print(f"📘 Posted {len(entries)} ledger entries for post_monthly_depreciation {property_id}")
-        return entries
-
-# =============================
-# Report Generator + KPIs
-# =============================
-
-class ReportGenerator:
-    def __init__(self, entries: List[LedgerEntry], property_units: int, vacant_units: int, loan_payment: float = 0.0):
-        self.entries = entries
-        self.total_units = property_units
-        self.vacant_units = vacant_units
-        self.loan_payment = loan_payment
-
-    def _filter(self, start: date, end: date) -> List[LedgerEntry]:
-        return [e for e in self.entries if start <= e.date <= end]
-
-    def income_statement(self, start: date, end: date) -> Dict[str, float]:
-        entries = self._filter(start, end)
-        rental_income = sum(e.credit - e.debit for e in entries if e.account == "Rental Income")
-        other_income = sum(e.credit - e.debit for e in entries if "Income" in e.account and e.account != "Rental Income")
-        operating_exp = sum(e.debit - e.credit for e in entries
-                            if "Expense" in e.account and e.account not in ("Depreciation Expense", "Loan Interest Expense"))
-        depreciation = sum(e.debit - e.credit for e in entries if e.account == "Depreciation Expense")
-        interest = sum(e.debit - e.credit for e in entries if e.account == "Loan Interest Expense")
-        egi = rental_income + other_income
-        noi = egi - operating_exp
-        net_income = noi - depreciation - interest
-        return {"Rental Income": rental_income, "Other Income": other_income, "EGI": egi,
-                "Operating Expenses": operating_exp, "NOI": noi, "Depreciation": depreciation,
-                "Interest": interest, "Net Income": net_income}
-
-    def cash_flow_indirect(self, start: date, end: date, opening_cash: Optional[float] = None) -> Dict:
-        bal_start = account_balance(self.entries, up_to=(start - timedelta(days=1)))
-        bal_end = account_balance(self.entries, up_to=end)
-        is_stmt = self.income_statement(start, end)
-        net_income = is_stmt["Net Income"]
-        chg_ar = bal_end.get("Accounts Receivable", 0.0) - bal_start.get("Accounts Receivable", 0.0)
-        chg_ap = bal_end.get("Accounts Payable", 0.0) - bal_start.get("Accounts Payable", 0.0)
-        depreciation = is_stmt["Depreciation"]
-        cfo = net_income + depreciation - chg_ar + chg_ap
-        capex_out = sum(e.debit for e in self._filter(start, end) if e.account in ("Property", "Equipment"))
-        cfi = -capex_out
-        chg_deposits = bal_end.get("Security Deposit Liability", 0.0) - bal_start.get("Security Deposit Liability", 0.0)
-        chg_loans = bal_end.get("Loan Payable", 0.0) - bal_start.get("Loan Payable", 0.0)
-        cff = chg_deposits + chg_loans
-        net_change_cash = cfo + cfi + cff
-        if opening_cash is None:
-            opening_cash = bal_start.get("Cash", 0.0)
-        closing_calc = opening_cash + net_change_cash
-        closing_gl = bal_end.get("Cash", 0.0)
-        return {
-            "Operating": {"Net Income": net_income, "Depreciation (add-back)": depreciation,
-                          "Δ AR (subtract if increase)": -chg_ar, "Δ AP (add if increase)": chg_ap,
-                          "Net Cash from Operating": cfo},
-            "Investing": {"Capital Expenditures": cfi},
-            "Financing": {"Δ Security Deposits": chg_deposits, "Δ Loans": chg_loans,
-                          "Net Cash from Financing": cff},
-            "Reconciliation": {"Opening Cash": opening_cash, "Net Change in Cash": net_change_cash,
-                               "Closing Cash (calc)": closing_calc, "Closing Cash (GL)": closing_gl,
-                               "Balanced": abs(closing_calc - closing_gl) < 1e-6}
-        }
-
-    def balance_sheet(self, as_of: date, beginning_retained_earnings: float = 0.0) -> Dict:
-        bal = account_balance(self.entries, up_to=as_of)
-        start_year = date(as_of.year, 1, 1)
-        is_ytd = self.income_statement(start_year, as_of)
-        ytd_ni = is_ytd["Net Income"]
-        retained_earnings = beginning_retained_earnings + ytd_ni
-        def amt(a): return bal.get(a, 0.0)
-        assets_current = {"Cash": amt("Cash"), "Accounts Receivable": amt("Accounts Receivable")}
-        assets_noncurrent = {"Property": amt("Property"), "Equipment": amt("Equipment"),
-                             "Accumulated Depreciation": -amt("Accumulated Depreciation")}
-        liab_current = {"Accounts Payable": -amt("Accounts Payable"),
-                        "Security Deposit Liability": -amt("Security Deposit Liability")}
-        liab_noncurrent = {"Loan Payable": -amt("Loan Payable")}
-        equity = {"Owner Capital": -amt("Owner Capital"), "Retained Earnings": retained_earnings}
-        total_assets = sum(assets_current.values()) + sum(assets_noncurrent.values())
-        total_liab = sum(liab_current.values()) + sum(liab_noncurrent.values())
-        total_equity = sum(equity.values())
-        balanced = abs(total_assets - (total_liab + total_equity)) < 1e-6
-        return {"Assets": {"Current": assets_current, "Non-current": assets_noncurrent},
-                "Liabilities": {"Current": liab_current, "Non-current": liab_noncurrent},
-                "Equity": equity,
-                "Totals": {"Total Assets": total_assets, "Total Liabilities": total_liab,
-                           "Total Equity": total_equity, "Liabilities + Equity": total_liab + total_equity,
-                           "Balanced": balanced, "YTD Net Income": ytd_ni, "Retained Earnings": retained_earnings}}
-
-    def kpis(self, start: date, end: date, avg_rent_per_unit: float, owner_equity: float) -> Dict[str, float]:
-        is_stmt = self.income_statement(start, end)
-        gpr = self.total_units * avg_rent_per_unit
-        vacancy_loss = self.vacant_units * avg_rent_per_unit
-        vacancy_pct = (vacancy_loss / gpr * 100.0) if gpr else 0.0
-        egi = gpr - vacancy_loss
-        opex_ratio = (is_stmt["Operating Expenses"] / egi * 100.0) if egi else 0.0
-        dscr = (is_stmt["NOI"] / self.loan_payment) if self.loan_payment else float("inf")
-        capex_out = sum(e.debit for e in self._filter(start, end) if e.account in ("Property", "Equipment"))
-        capex_ratio = (capex_out / egi * 100.0) if egi else 0.0
-        cash_on_cash = (is_stmt["Net Income"] / owner_equity * 100.0) if owner_equity else 0.0
-        return {"GPR": gpr, "Vacancy Loss": vacancy_loss, "Vacancy Loss %": vacancy_pct, "EGI": egi,
-                "NOI": is_stmt["NOI"], "OpEx Ratio %": opex_ratio, "DSCR": dscr,
-                "CapEx Ratio %": capex_ratio, "Cash-on-Cash %": cash_on_cash}
 
 # =============================
 # Text-to-PDF helpers

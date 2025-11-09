@@ -124,6 +124,7 @@ async def discover_and_register_plugins(app: FastAPI):
 
             except Exception as e:
                 logger.exception(f"❌ Failed to load plugin {plugin_name}: {e}")
+                raise e
 
     # -------------------------------------------------
     # 🚀 PROD MODE: load only user-installed versions

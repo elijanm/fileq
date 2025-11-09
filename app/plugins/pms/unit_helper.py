@@ -1,7 +1,7 @@
 from typing import List, Optional
 import re
 from datetime import datetime,timezone
-from plugins.pms.models import PropertyCreate ,UnitBase
+from plugins.pms.models.models import PropertyCreate ,UnitBase
 from bson import ObjectId
 from datetime import datetime, timezone
 from typing import List, Optional

@@ -17,7 +17,7 @@ from bson import ObjectId
 from routes.auth import get_current_user, SessionInfo
 from plugins.pms.services.pdf_service import generate_pdf
 from plugins.pms.helpers import recalc_invoice,find_utility,serialize_doc
-from plugins.pms.models import (
+from plugins.pms.models.models import (
     Vendor,Expense,Task
 )
 

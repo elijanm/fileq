@@ -3,6 +3,7 @@ from fastapi import (
     BackgroundTasks, Query, FastAPI
 )
 import os,asyncio
+import math
 from fastapi.responses import FileResponse, JSONResponse,HTMLResponse
 from fastapi.templating import Jinja2Templates
 from bson import Regex
@@ -10,28 +11,35 @@ from datetime import datetime, timezone,timedelta,date
 from typing import List, Optional, Dict,Any
 from pydantic import BaseModel, Field
 from bson import ObjectId
+from core.MongoORJSONResponse import normalize_bson
+from fastapi.responses import ORJSONResponse
 from routes.auth import get_current_user, SessionInfo
 from plugins.pms.services.pdf_service import generate_pdf
 from plugins.pms.helpers import recalc_invoice,find_utility,serialize_doc
-from plugins.pms.models import (
+from plugins.pms.models.models import (
     PropertyInDB,PropertyResponse,LeaseCreate,LeaseInDB, Tenant, Unit,
     Payment,PaymentCreate,ContractSignRequest,UnitListItem, Contract,Utility, WaterUsage,PropertyListResponse, MeterUpdate,PropertyCreate,UnitCreate,DepositTransaction,ContractCreate,Clause
 )
-from plugins.pms.utils.ledger import Ledger,LedgerEntry,Invoice,LineItem,compute_financial_metrics,compute_forecast_metrics
+from plugins.pms.utils.ledger import compute_financial_metrics,compute_forecast_metrics
+from plugins.pms.accounting.ledger import Ledger,LedgerEntry
+from plugins.pms.models.ledger_entry import Invoice, InvoiceLineItem as LineItem
 from plugins.pms.utils.lease import prepare_contract_data,capture_signature_metadata
 from plugins.pms.vendor import add_routes
 from utils.media_tools import upload_image
 from plugins.pms.unit_helper import auto_generate_units,batch_insert_units,ensureRoomAssigned
-from plugins.pms.models import (
+from plugins.pms.models.models import (
    
 PropertyDetailResponse,UnitUpdate,UnitResponse,PropertyUpdate
 )
+from plugins.pms.utils.invoice_manager import Ticket,TicketPriority,TicketCategory
 from plugins.pms.utils.tenant_snapshot import TenantSnapshotManager
 from statistics import mean
 from math import ceil
 from plugins.pms.utils.prorate import prorated_rent_charges
 from plugins.pms.property_helper import get_property_detail
-
+from plugins.pms.snapshots.property import PropertySnapshotService
+from plugins.pms.snapshots.finance_properties import FinancialSnapshotService
+from utils.date_helper import parse_period_query
 
 templates = Jinja2Templates(directory="plugins/pms/templates")
 router = APIRouter(prefix="/property", tags=["Property Management"])
@@ -45,16 +53,148 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # UTILITIES
 # ===============================================================
 
-async def authorize_property(db, property_id: str, owner_id: str):
-    prop = await db["properties"].find_one({"_id": property_id, "owner_id": owner_id})
-    if not prop:
-        raise HTTPException(403, "Unauthorized or property not found")
-    return prop
+async def authorize_property(
+    db,
+    property_ids: Optional[List[str]],
+    owner_id: str
+):
+    """
+    Authorize access to one or more properties for a given owner.
+    If property_ids is None → fetches all owned properties.
+    If one or more IDs → verifies they belong to the owner.
+    Returns the authorized property documents.
+    """
+    p = PropertySnapshotService(db)
+    authorized = await p.get_or_refresh_snapshot(owner_id)
 
+    if not authorized:
+        raise HTTPException(status_code=403, detail="Unauthorized or properties not found")
+
+    # If specific property_ids provided, ensure full match
+    if property_ids:
+        found_ids = {str(p["id"]) for p in authorized}
+        missing = [pid for pid in property_ids if pid not in found_ids]
+        if missing:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Unauthorized for property IDs: {missing}"
+            )
+
+    return authorized
+
+from fastapi import FastAPI, UploadFile, Form
 
 # ===============================================================
 # ROUTES
 # ===============================================================
+
+
+@router.post("/utility/ocr/reader")
+async def read_meter_with_ocr(
+    file: UploadFile,
+    reference: str = Form(...),
+    confidence_threshold: float = Form(0.5)
+):
+    
+    import numpy as np
+    import cv2
+    import base64
+    from ultralytics import YOLO
+    from PIL import Image, ImageDraw
+    def add_round_border(image, border_color=(232, 232, 232), border_radius=30, border_width=3):
+        image = image.convert("RGBA")
+        mask = Image.new("L", image.size, 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle([0, 0, image.size[0], image.size[1]], radius=border_radius, fill=255)
+        mask_in = Image.new("L", image.size, 0)
+        draw = ImageDraw.Draw(mask_in)
+        draw.rounded_rectangle(
+            [border_width, border_width, image.size[0]-border_width, image.size[1]-border_width],
+            radius=max(border_radius-border_width, 0), fill=255
+        )
+        border_image = Image.new("RGBA", image.size, color=border_color)
+        new_image = Image.new("RGBA", image.size, color=(220, 220, 65))
+        new_image.paste(border_image, mask=mask)
+        new_image.paste(image, mask=mask_in)
+        return new_image
+    
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        MODEL_PATH = os.path.join(BASE_DIR, "ai", "model.pt")
+        model = YOLO(MODEL_PATH)
+        print("✅ Model loaded:", model.names)
+
+        digit_labels = [str(i) for i in range(10)]
+        CONF_THRESH = 0.4
+        
+        image_bytes = await file.read()
+        npimg = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+        if img is None:
+            return JSONResponse({"error": "Invalid image"}, status_code=400)
+
+        # Resize for model
+        img = cv2.resize(img, (720, 525))
+
+        # Predict digits
+        results = model.predict(img, conf=CONF_THRESH, verbose=False)[0]
+        detections = []
+
+        for x1, y1, x2, y2, score, cls in results.boxes.data.tolist():
+            w = x2 - x1
+            if score >= CONF_THRESH and w > 10:
+                detections.append({
+                    "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                    "class_id": int(cls),
+                    "score": float(score)
+                })
+
+        if not detections:
+            return JSONResponse({"reading": "", "message": "No digits detected."})
+
+        # Sort digits left→right
+        detections.sort(key=lambda d: d["bbox"][0])
+
+        # Build reading string + average confidence
+        reading = "".join(digit_labels[d["class_id"]] for d in detections)
+        avg_conf = sum(d["score"] for d in detections) / len(detections)
+
+        # Draw boxes for debugging / optional visualization
+        annotated = img.copy()
+        for det in detections:
+            x1, y1, x2, y2 = det["bbox"]
+            label = digit_labels[det["class_id"]]
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.putText(annotated, label, (x1, y1 - 5),
+                        cv2.FONT_HERSHEY_DUPLEX, 0.8, (0, 0, 255), 1)
+
+        # Convert annotated frame to base64 (optional)
+        annotated_pil = Image.fromarray(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB))
+        annotated_pil = add_round_border(annotated_pil)
+        annotated_pil = annotated_pil.convert("RGB")
+        buf = io.BytesIO()
+        annotated_pil.save(buf, format="JPEG")
+        encoded_image = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        # Build response
+        return JSONResponse({
+            "reading": reading,
+            "confidence_avg": round(avg_conf, 3),
+            "detections": detections,
+            "annotated_base64": encoded_image
+        })
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+@router.get("/properties/snapshot")
+async def get_user_property_snapshot(
+    request: Request,
+    user: SessionInfo = Depends(get_current_user)
+):
+    service = PropertySnapshotService(request.app.state.adb)
+    snapshot = await service.get_or_refresh_snapshot(owner_id=user.user_id)
+    snapshot  = sorted(snapshot, key=lambda p: p.get("units_occupied", 0), reverse=True)
+    return snapshot
 
 @router.get("/tenants/search/{id_number}")
 async def search_tenant(
@@ -853,65 +993,60 @@ async def update_water_meter(request: Request, unit_id: str, payload: MeterUpdat
     )
     return {"message": f"Meter updated for {unit['name']}", "reading": payload.current_reading}
 
-@router.get("/invoices/summary")
+@router.get("/invoices/summary",response_class=ORJSONResponse)
 async def invoices_summary(
     request: Request,
-    property_id: str | None = Query(
+    property_ids: Optional[List[str]] = Query(
         default=None,
         description="Filter by property ID (optional). If not provided, returns all properties accessible to user."
     ),
-    month: str = Query(default=(date.today() - timedelta(days=60)).strftime("%Y-%m"), description="Format: YYYY-MM"),
+    month: Optional[str] = Query(None, description="Format: YYYY-MM"),
     inv_status: str | None = Query(
-        default=None,
+        default="any",
         description="Invoice status filter: paid | partial | issued | overpaid | any (optional)"
     ),
     q: str = Query("", description="Search by tenant name, email, or unit"),
-    user: Any = Depends(get_current_user)
+    page: int = Query(1, ge=1, description="Page number, starting from 1"),
+    limit: int = Query(10, ge=1, le=200, description="Number of items per page"),
+    user: SessionInfo = Depends(get_current_user)
 ):
     """
-    Fetches filtered invoices and computes financial + forecast metrics for a given property/month.
+     Fetches filtered invoices and computes financial + forecast metrics for a given property/month.
     """
     db = request.app.state.adb
+    start_date, end_date = parse_period_query(month)
+    print(start_date,end_date,month)
+    query: Dict[str, Any] = {
+        # "owner.owner_id":ObjectId(user.user_id),
+        "date_issued": {"$gte": start_date, "$lte": end_date}
+    }
+   
+    
 
     # --- 1️⃣ Authorization ---
-    if property_id:
-        await authorize_property(db, property_id, user.user_id)
-        query[ "property_id"]= property_id
+    if isinstance(property_ids, list):
+        await authorize_property(db, property_ids, user.user_id)
+        query["property_id"] = {"$in": property_ids}
+    
 
-    # --- 2️⃣ Date range from month ---
-    try:
-        start_date = datetime.strptime(month, "%Y-%m")
-    except ValueError:
-        raise ValueError("Invalid month format. Expected YYYY-MM")
-    next_month = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
-    end_date = next_month
-
-    # --- 3️⃣ Base query ---
-    query: Dict[str, Any] = {
-       
-        # "date_issued": {"$gte": start_date, "$lt": end_date}
-    }
-    
-    if property_id:
-        await authorize_property(db, property_id, user.user_id)
-        query[ "property_id"]= property_id
-    
-    
 
     # --- 4️⃣ Optional filters ---
     if inv_status and inv_status.lower() != "any":
         query["status"] = inv_status.lower()
 
     if q:
+        
         query["$or"] = [
             {"tenant_name": Regex(q, "i")},
             {"tenant_email": Regex(q, "i")},
             {"unit_id": Regex(q, "i")},
         ]
-   
+    
     # --- 5️⃣ Fetch invoices + related entries in parallel ---
-    invoices_cursor = db.property_invoices.find(query)
-    invoices = await invoices_cursor.to_list(None)
+    total = await db.property_invoices.count_documents(query)
+    skip = (page - 1) * limit
+    cursor = db.property_invoices.find(query).sort("date_issued", -1).skip(skip).limit(limit)
+    invoices = await cursor.to_list(length=limit)
 
     tenant_ids = [str(inv["tenant_id"]) for inv in invoices if "tenant_id" in inv]
     ledger_query={
@@ -919,9 +1054,9 @@ async def invoices_summary(
         "date": {"$gte": start_date, "$lt": end_date}
     }
     units_query={}
-    if property_id:
-        ledger_query["property_id"]= str(property_id)
-        units_query["property_id"]= str(property_id)
+    if isinstance(property_ids, list):
+        ledger_query["property_id"] = {"$in": property_ids}
+        units_query["property_id"]= {"$in": property_ids}
         
     ledger_query["tenant_id"]= {"$in": tenant_ids}
     
@@ -946,25 +1081,36 @@ async def invoices_summary(
         LedgerEntry(**{**entry, "_id": str(entry.pop("_id", ""))})
         for entry in ledger_entries
     ]
+    from plugins.pms.snapshots.finance_properties import FinancialSnapshotService
     
+    fm = FinancialSnapshotService(db)
+    filters = {
+        "property_ids": property_ids,
+        "start_date": start_date,
+        "end_date": end_date
+    }
     
-    financial_metrics = compute_financial_metrics(
-        invoices=invoices,
-        ledger_entries=ledger_entries,
-        moving_out_next_month=moving_out_next_month,
-        total_units=total_units,
-        vacant_units=vacant_units,
-        occupied_units=occupied_units,
-    )
-   
+    financial_metrics = await fm.get_or_refresh_snapshot({
+        
+    },is_cache=True)
+    
+    # financial_metrics = compute_financial_metrics(
+    #     invoices=invoices,
+    #     ledger_entries=ledger_entries,
+    #     moving_out_next_month=moving_out_next_month,
+    #     total_units=total_units,
+    #     vacant_units=vacant_units,
+    #     occupied_units=occupied_units,
+    # )
+    # print(financial_metrics)
     forecast_metrics = compute_forecast_metrics(invoices, ledger_entries)
 
     # --- 8️⃣ Response payload ---
  
-    from core.MongoORJSONResponse import normalize_bson
+  
     # print(invoices)
     results= {
-        "property_id": property_id,
+        "property_id": property_ids,
         "month": month,
         "filters": {
             "status": inv_status or "any",
@@ -979,12 +1125,133 @@ async def invoices_summary(
             "vacant_units": vacant_units,
             "occupied_units": occupied_units,
         },
-        "invoices": invoices,
+        "pagination":{
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": max(1, math.ceil(total / limit))
+            
+        },
+        "invoices": [normalize_bson(inv.model_dump(by_alias=True)) for inv in invoices],
     }
    
-    
     return results
-    
+@router.get("/tickets/list")
+async def list_tickets(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number, starting at 1"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    property_id: Optional[str] = Query(None, description="Filter by metadata.property_id"),
+):
+    query = {}
+    if property_id:
+        query["metadata.property_id"] = property_id
+    db = request.app.state.adb
+    total = await db.property_tickets.count_documents(query)
+    skip = (page - 1) * limit
+
+    cursor = (
+        db.property_tickets
+        .find(query)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+
+    results = []
+   
+    async for doc in cursor:
+        results.append(Ticket(**doc))
+
+    payload = {
+        "pagination": {
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": ceil(total / limit) if total else 1,
+        },
+        "items": results,
+    }
+    return payload
+@router.patch("ticket/{ticket_id}")
+async def update_ticket(
+    request: Request,                                                                                                                                                       
+    ticket_id: str,
+    payload: dict = Body(...),
+):
+    db = request.app.state.adb
+    # Fetch ticket
+    ticket_doc = await db.property_tickets.find_one({"_id": ObjectId(ticket_id)})
+    if not ticket_doc:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    ticket = Ticket(**ticket_doc)
+    updates = {}
+
+    # ---- Handle normal fields ----
+    if "status" in payload:
+        updates["status"] = payload["status"]
+
+    if "title" in payload:
+        updates["title"] = payload["title"]
+
+    # ---- Handle meter reading input ----
+    if (
+        ticket.category == TicketCategory.INVOICE_PREP
+        and "tasks" in payload
+    ):
+        for task_update in payload["tasks"]:
+            task_id = task_update.get("id")
+            current_reading = task_update.get("metadata", {}).get("current_reading")
+
+            if not (task_id and current_reading is not None):
+                continue
+
+            # Find matching task
+            for task in ticket.tasks:
+                if task.id == task_id and task.status == TaskStatus.AWAITING_INPUT:
+                    task.metadata["current_reading"] = float(current_reading)
+                    task.status = TaskStatus.COMPLETED
+                    task.updated_at = datetime.now(timezone.utc)
+
+                    # --- Update corresponding invoice ---
+                    invoice_id = task.metadata.get("invoice_id")
+                    line_item_id = task.metadata.get("line_item_id")
+                    if not (invoice_id and line_item_id):
+                        continue
+
+                    inv_doc = await db.property_invoices.find_one({"_id": ObjectId(invoice_id)})
+                    if not inv_doc:
+                        continue
+
+                    # Update line item
+                    updated_line_items = []
+                    total = 0
+                    for item in inv_doc.get("line_items", []):
+                        if item.get("id") == line_item_id:
+                            item["metadata"]["current_reading"] = float(current_reading)
+                        total += item.get("amount", 0)
+                        updated_line_items.append(item)
+
+                    # --- Recalculate totals (simple sum for now) ---
+                    await db.property_invoices.update_one(
+                        {"_id": ObjectId(invoice_id)},
+                        {
+                            "$set": {
+                                "line_items": updated_line_items,
+                                "total_amount": total,
+                                "status": "ready",
+                                "updated_at": datetime.now(timezone.utc),
+                            }
+                        },
+                    )
+
+    # ---- Update the ticket document ----
+    updates["tasks"] = [t.model_dump() for t in ticket.tasks]
+    updates["updated_at"] = datetime.now(timezone.utc)
+
+    await db.tickets.update_one({"_id": ticket_id}, {"$set": updates})
+    return {"message": "Ticket updated successfully"}
 @router.post("/invoices/generate")
 async def generate_invoices(request: Request,
                             property_id: str = Body(...),

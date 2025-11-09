@@ -48,6 +48,25 @@ async def discover_plugins():
     db_gen = get_database()
     db = await anext(db_gen)
     col = db.plugins
+    
+    seen = set()
+    deleted = 0
+    
+    cursor =  col.find({})
+    async for c in cursor:
+        name= c.get("name")
+        if not name:
+            continue
+
+        if name in seen:
+            await col.delete_one({"_id": c.get("_id")})
+            deleted += 1
+        else:
+            seen.add(name)
+            
+    if deleted>0:
+         print(f"✅ Deleted {deleted} duplicate documents.")
+    
     for module in PLUGIN_DIR.iterdir():
         if not module.is_dir():
             continue

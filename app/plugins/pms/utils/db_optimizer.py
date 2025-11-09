@@ -69,4 +69,29 @@ class DatabaseOptimizer:
             ("credit_balance", 1)
         ])
         
+        
+        await self.db.property_ledger_entries.createIndex({ "_id": 1 }) 
+
+        # // 2️⃣ Match invoices quickly and support $lookup joins
+        # db.property_ledger_entries.createIndex({ invoice_id: 1 })
+
+        # // 3️⃣ Optimize lookups or reports by property + invoice
+        # db.property_ledger_entries.createIndex({ property_id: 1, invoice_id: 1 })
+
+        # // 4️⃣ Optimize tenant ledger lookups
+        # db.property_ledger_entries.createIndex({ tenant_id: 1, invoice_id: 1 })
+
+        # // 5️⃣ Speed up account-based queries (e.g. “Cash” account)
+        # db.property_ledger_entries.createIndex({ account: 1 })
+
+        # // 6️⃣ Optimize date-range queries across all accounts
+        # db.property_ledger_entries.createIndex({ date: -1 })
+
+        # // 7️⃣ Combine account + date for efficient range scans per account
+        # db.property_ledger_entries.createIndex({ account: 1, date: -1 })
+
+        # // 8️⃣ Combine property + account + date for per-property financial reports
+        # db.property_ledger_entries.createIndex({ property_id: 1, account: 1, date: -1 })
+
+        
         print("✓ All indexes created successfully")

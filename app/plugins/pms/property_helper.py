@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 from routes.auth import SessionInfo
-from plugins.pms.models import (
+from plugins.pms.models.models import (
     PropertySummary,
 UnitMetrics,
 TenantMetrics,

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lease Agreement</title>
+    <style>
+      body {
+        font-family: "Georgia", serif;
+        line-height: 1.6;
+        margin: 40px;
+        color: #222;
+      }
+      h1,
+      h2,
+      h3 {
+        text-align: center;
+      }
+      h1 {
+        text-transform: uppercase;
+        letter-spacing: 2px;
+      }
+      p {
+        margin: 8px 0;
+      }
+      .section {
+        margin-top: 25px;
+      }
+      .subsection {
+        margin-left: 20px;
+      }
+      strong {
+        font-weight: 600;
+      }
+      .signature-block {
+        margin-top: 50px;
+        display: flex;
+        justify-content: space-between;
+        padding-top: 40px;
+      }
+      .signature {
+        width: 45%;
+        text-align: center;
+      }
+      .signature-line {
+        border-top: 1px solid #000;
+        margin-top: 40px;
+        padding-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LEASE AGREEMENT</h1>
+
+    <p>
+      This Lease Agreement (“Agreement”) is made this {{ agreement_date }} by
+      and between:
+    </p>
+
+    <p>
+      <strong>Landlord:</strong> {{ landlord_name }} (“Landlord”)<br />
+      <strong>Tenant(s):</strong> {{ tenant_name }} (“Tenant”)
+    </p>
+
+    {% if multiple_tenants %}
+    <p>
+      In the event there is more than one Tenant, each reference to “Tenant”
+      shall apply to each of them, jointly and severally. Each Tenant is jointly
+      and severally liable to Landlord for payment of rent and performance under
+      this Agreement.
+    </p>
+    {% endif %}
+
+    <p>
+      Each Landlord and Tenant may be referred to individually as a “Party” and
+      collectively as the “Parties.”
+    </p>
+
+    <p><strong>Occupant(s):</strong> {{ occupants }}</p>
+
+    <div class="section">
+      <h3>1. Premises</h3>
+      <p>The premises leased is a/an {{ property_type }} with:</p>
+      <ul>
+        <li>{{ bedrooms }} bedroom(s)</li>
+        <li>{{ bathrooms }} bathroom(s)</li>
+        <li>{{ parking_spaces }} parking space(s)</li>
+      </ul>
+      <p>Located at: <strong>{{ property_address }}</strong></p>
+
+      {% if is_furnished %}
+      <p>The Premises includes the following furnishings: {{ furnishings }}</p>
+      {% else %}
+      <p>The Premises is <strong>NOT furnished</strong>.</p>
+      {% endif %}
+
+      <p>Additional description: {{ premises_description }}</p>
+    </div>
+
+    <div class="section">
+      <h3>2. Agreement to Lease</h3>
+      <p>
+        Landlord agrees to lease to Tenant and Tenant agrees to lease from
+        Landlord according to the terms herein.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>3. Term</h3>
+      <p>
+        This is a <strong>{{ lease_type }}</strong> Lease beginning on
+        <strong>{{ lease_start }}</strong> and ending on
+        <strong>{{ lease_end }}</strong>.
+      </p>
+      {% if allow_holdover %}
+      <p>
+        A month-to-month holdover tenancy may be created. Either Party must give
+        30 days’ written notice via TenantCloud to terminate.
+      </p>
+      {% else %}
+      <p>
+        Tenant must vacate the Premises at the end of the Term. No holding over
+        is permitted unless extended by written agreement.
+      </p>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h3>4. Rent</h3>
+      <p>
+        Monthly Rent: <strong>{{ rent_amount }} {{ rent_currency }}</strong>,
+        due on the {{ rent_due_day }} of each month.
+      </p>
+      <p>
+        Rent will be paid via TenantCloud or at Landlord’s address: {{
+        landlord_address }}
+      </p>
+      <p>Proration: {{ proration_amount }}</p>
+      <p>Bounced Payments Fee: {{ bounced_fee }}</p>
+    </div>
+
+    <div class="section">
+      <h3>5. Pet Policy</h3>
+      {% if allows_pets %}
+      <p>
+        Pets allowed with pet deposit of {{ pet_deposit }}. Pet addendum
+        applies.
+      </p>
+      {% else %}
+      <p>
+        No pets allowed. Unauthorized pets will incur a penalty of {{
+        pet_violation_fee }}.
+      </p>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h3>6. Late Fee</h3>
+      <p>
+        Rent paid after {{ late_after_day }} day of the month incurs a late fee
+        of {{ late_fee_flat }} or {{ late_fee_percent }}% of the outstanding
+        amount.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>7. Additional Rent</h3>
+      <p>
+        All additional charges are considered additional rent and subject to the
+        same payment terms.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>8. Utilities</h3>
+      <p>
+        Tenant pays all utilities except: {{
+        landlord_paid_utilities|default("None") }}
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>9. Security Deposit</h3>
+      <p>
+        Deposit: <strong>{{ security_deposit }} {{ rent_currency }}</strong>,
+        refundable within 30 days of move-out, subject to deductions.
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>10–44. Other Terms</h3>
+      <p>
+        All remaining clauses (10–44) apply as detailed in the original
+        agreement covering possession, maintenance, insurance, entry rights,
+        default, and governing law.
+      </p>
+      <p><strong>Governing Law:</strong> {{ governing_state }}</p>
+      <p>
+        <strong>Dispute Resolution:</strong> {{ dispute_resolution_method }}
+      </p>
+      <p>
+        <strong>Miscellaneous Terms:</strong> {{
+        miscellaneous_terms|default("None") }}
+      </p>
+    </div>
+
+    <div class="signature-block">
+      <div class="signature">
+        <div class="signature-line">Landlord Signature</div>
+        <p>{{ landlord_name }}</p>
+      </div>
+      <div class="signature">
+        <div class="signature-line">Tenant Signature</div>
+        <p>{{ tenant_name }}</p>
+      </div>
+    </div>
+
+    <p style="text-align: center; margin-top: 20px">
+      Effective Date: <strong>{{ effective_date }}</strong>
+    </p>
+  </body>
+</html>

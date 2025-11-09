@@ -316,8 +316,20 @@ async def create_plugin_template(name: str, db: str = "mongo", template: str = "
         return
 
     console.print(f"[cyan]✨ Creating plugin '{name}' (db={db}, template={template})...[/cyan]")
-    (base_dir / "migrations").mkdir(parents=True, exist_ok=True)
-    (base_dir / "templates").mkdir(parents=True, exist_ok=True)
+    folders = [
+        "migrations", "templates", "utils", "snapshots", "docs",
+        "services", "tests", "reports", "models", "ai", "tasks"
+    ]
+
+    for name in folders:
+        folder = base_dir / name
+        folder.mkdir(parents=True, exist_ok=True)
+        if name not in["docs"]:
+            (folder / "__init__.py").touch(exist_ok=True)
+        else:
+            (folder / "README.md").touch(exist_ok=True)
+    
+
 
     # manifest (plugin.json)
     manifest = {
@@ -346,7 +358,23 @@ async def create_plugin_template(name: str, db: str = "mongo", template: str = "
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     (base_dir / "plugin.json").write_text(json.dumps(manifest, indent=4))
+    schedule_code=textwrap.dedent("""
+    import asyncio
+    import dramatiq
+    from bson import ObjectId
+    from datetime import datetime, timezone
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from plugins.pms.utils.advanced_rent_analytics import AdvancedRentAnalytics
+    from workers.tasks import MONGO_URI
+    from core.scheduler_decorators import run_every_day,run_every_hour,run_every_minute
 
+    @run_every_hour
+    @dramatiq.actor
+    def test_hourly():
+        #Code will run every hour
+        print(f"Called at {datetime.now(timezone.utc)}")
+    """)
+    (base_dir / "tasks" / "test_task.py").write_text(schedule_code)
     # permissions.json
     permissions = [f"{name}.*", f"{name}.create", f"{name}.view"]
     (base_dir / "permissions.json").write_text(json.dumps(permissions, indent=4))
@@ -380,7 +408,7 @@ class {name.capitalize()}Model(BaseModel):
     created_at: str
     data: dict
 """
-    (base_dir / "models.py").write_text(model_code)
+    (base_dir/"models" / "models.py").write_text(model_code)
 
     # templates
     dashboard_html = f"""<html>
@@ -394,12 +422,12 @@ class {name.capitalize()}Model(BaseModel):
 
     # plugin.py (routes differ by template)
     if template == "chat":
-        plugin_code = f'''from fastapi import APIRouter, WebSocket
+        plugin_code = f'''from fastapi import APIRouter, WebSocket,Request
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from routes.auth import get_current_user,checker,Depends,SessionInfo
 
-def init_plugin():
+def init_plugin(app):
     router = APIRouter()
     templates = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(templates))
@@ -424,7 +452,7 @@ def init_plugin():
     return {{"router": router}}
 '''
     else:
-        plugin_code = f'''from fastapi import APIRouter
+        plugin_code = f'''from fastapi import APIRouter,Request
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from routes.auth import get_current_user,checker,Depends,SessionInfo
